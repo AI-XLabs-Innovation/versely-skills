@@ -1,0 +1,72 @@
+name: Sync Model Catalog
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Daily at 3 AM UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch current model catalog
+        id: fetch
+        env:
+          VERSELY_API_KEY: ${{ secrets.VERSELY_API_KEY }}
+          VERSELY_API_URL: ${{ secrets.VERSELY_API_URL }}
+        run: |
+          curl -s "${VERSELY_API_URL:-https://api.versely.app}/api/v1/agentic/models" \
+            -H "Authorization: Bearer $VERSELY_API_KEY" \
+            -o models-raw.json
+
+          if [ ! -s models-raw.json ] || ! jq . models-raw.json > /dev/null 2>&1; then
+            echo "Failed to fetch models or invalid JSON"
+            exit 1
+          fi
+
+          echo "model_count=$(jq '.models | length' models-raw.json)" >> $GITHUB_OUTPUT
+
+      - name: Check for changes
+        id: diff
+        run: |
+          # Compare fetched models with current reference
+          if [ -f models-raw.json ]; then
+            CURRENT_HASH=$(md5sum versely-generate/models-reference.md | cut -d' ' -f1)
+            echo "current_hash=$CURRENT_HASH" >> $GITHUB_OUTPUT
+            echo "has_new_models=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create PR if models changed
+        if: steps.diff.outputs.has_new_models == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="auto/sync-models-$(date +%Y%m%d)"
+          git checkout -b "$BRANCH"
+
+          # The models-raw.json contains the latest catalog
+          # A maintainer should review and update models-reference.md accordingly
+          cp models-raw.json versely-generate/models-catalog-latest.json
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add versely-generate/models-catalog-latest.json
+
+          if git diff --cached --quiet; then
+            echo "No changes detected"
+            exit 0
+          fi
+
+          git commit -m "chore: sync model catalog ($(date +%Y-%m-%d))"
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --title "Update model catalog ($(date +%Y-%m-%d))" \
+            --body "Auto-synced from \`GET /api/v1/agentic/models\`. Review and update \`models-reference.md\` if new models were added or pricing changed." \
+            --base main
