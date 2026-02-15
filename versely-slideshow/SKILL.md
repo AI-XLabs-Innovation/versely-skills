@@ -10,7 +10,7 @@ allowed-tools: Bash, Read
 metadata:
   agentskills.io:
     category: content-creation
-    homepage: https://versely.app
+    homepage: https://versely.studio
     tags: ["slideshow", "video", "presentation", "reel", "carousel"]
 ---
 
@@ -24,7 +24,7 @@ Create AI-generated slideshows with multiple images, add text overlays, and conv
 
 ```bash
 VERSELY_API_KEY="vsk_..."
-VERSELY_API_URL="https://api.versely.app"
+VERSELY_API_URL="https://api.versely.studio"
 ```
 
 Every request:
@@ -87,7 +87,7 @@ echo "Slideshow ID: $SLIDESHOW_ID"
 }
 ```
 
-**Credit cost:** Same as image generation (~2 credits per image for Flux Pro Ultra).
+**Credit cost:** Same as image generation (~1 credit per image for Flux Pro Ultra via API).
 
 ## Step 2: Add Text Overlays (Optional)
 

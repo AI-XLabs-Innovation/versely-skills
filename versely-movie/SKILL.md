@@ -9,7 +9,7 @@ allowed-tools: Bash, Read
 metadata:
   agentskills.io:
     category: content-creation
-    homepage: https://versely.app
+    homepage: https://versely.studio
     tags: ["movie", "storyboard", "video", "scenes"]
 ---
 
@@ -23,7 +23,7 @@ Create multi-scene AI movies: expand scene ideas into cinematic descriptions, ge
 
 ```bash
 VERSELY_API_KEY="vsk_..."
-VERSELY_API_URL="https://api.versely.app"
+VERSELY_API_URL="https://api.versely.studio"
 ```
 
 Do NOT send `user_id` — the API key resolves the user server-side.
@@ -124,7 +124,7 @@ curl -X POST "$VERSELY_API_URL/api/v1/generate/story" \
   }'
 ```
 
-**Credit cost:** Sora 2 Pro Storyboard costs ~$0.30/second → ~6 credits/second. A 10-second storyboard ≈ 60 credits.
+**Credit cost:** Sora 2 Pro Storyboard costs ~$0.30/second → ~3 credits/second via API. A 10-second storyboard ≈ 30 credits.
 
 ## Step 4: Poll for Completion
 
@@ -168,7 +168,7 @@ This is available through the agentic chat system's `merge_movie_scenes` tool, w
 # 1. Check credits (storyboard is expensive)
 CREDITS=$(curl -s "$VERSELY_API_URL/api/v1/user/me" \
   -H "Authorization: Bearer $VERSELY_API_KEY" | jq -r '.credits')
-echo "Credits: $CREDITS (need ~60 for 10s storyboard)"
+echo "Credits: $CREDITS (need ~30 for 10s storyboard via API)"
 
 # 2. Expand scenes
 SCENE1=$(curl -s -X POST "$VERSELY_API_URL/api/v1/generate/expand-scene" \
@@ -215,11 +215,11 @@ done
 
 ## Available Story Models
 
-| Model | Best For | ~Credits (10s) |
-|-------|----------|----------------|
-| Sora 2 Pro Storyboard | Best quality, multi-scene | ~60 |
-| Kling 2.5 Turbo | Good quality, faster | ~10 |
-| VEO 3.1 First Last Frame | Transition between 2 frames | ~4-8 |
+| Model | Best For | ~Credits (10s, API) |
+|-------|----------|---------------------|
+| Sora 2 Pro Storyboard | Best quality, multi-scene | ~30 |
+| Kling 2.5 Turbo | Good quality, faster | ~5 |
+| VEO 3.1 First Last Frame | Transition between 2 frames | ~2-4 |
 
 ## Error Handling
 

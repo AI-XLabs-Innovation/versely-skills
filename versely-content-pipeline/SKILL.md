@@ -10,7 +10,7 @@ allowed-tools: Bash, Read
 metadata:
   agentskills.io:
     category: content-creation
-    homepage: https://versely.app
+    homepage: https://versely.studio
     tags: ["workflow", "pipeline", "automation", "content-calendar"]
 ---
 
@@ -29,7 +29,7 @@ Orchestrate multiple Versely capabilities into complete content creation pipelin
 
 ```bash
 VERSELY_API_KEY="vsk_..."
-VERSELY_API_URL="https://api.versely.app"
+VERSELY_API_URL="https://api.versely.studio"
 ```
 
 All requests use `Authorization: Bearer $VERSELY_API_KEY`. Do NOT send `user_id`.
@@ -45,25 +45,25 @@ CREDITS=$(curl -s "$VERSELY_API_URL/api/v1/user/me" \
 echo "Available credits: $CREDITS"
 ```
 
-**Quick cost reference:**
+**Quick cost reference** (API keys get 2x pricing — half of in-app costs):
 
 | Operation | Credits |
 |-----------|---------|
-| Image (Flux Pro Ultra) | ~2 |
+| Image (Flux Pro Ultra) | ~1 |
 | Image (Imagen 4) | ~1 |
-| Video 5s (Sora 2) | ~10 |
-| Video 5s (VEO 3.1) | ~4 |
-| Music (Suno V5) | ~10 |
-| Slideshow (5 images) | ~10 |
-| Storyboard (10s, Sora 2 Pro) | ~60 |
-| Social post per platform | 2 |
+| Video 5s (Sora 2) | ~5 |
+| Video 5s (VEO 3.1) | ~2 |
+| Music (Suno V5) | ~5 |
+| Slideshow (5 images) | ~5 |
+| Storyboard (10s, Sora 2 Pro) | ~30 |
+| Social post per platform | 1 |
 | UGC overlay / captions | 0 (processing only) |
 
 **Example budget:** "Create a 5-image slideshow reel and post to Instagram + TikTok"
-- 5 images x 2 credits = 10
+- 5 images x 1 credit = 5
 - Video conversion = 0 (FFmpeg, no credit cost)
-- 2 platforms x 2 credits = 4
-- **Total: ~14 credits**
+- 2 platforms x 1 credit = 2
+- **Total: ~7 credits**
 
 If `CREDITS < estimated total`, tell the user before starting.
 
@@ -325,7 +325,7 @@ for i in $(seq 0 6); do
 done
 ```
 
-**Credit cost:** 7 images (14 credits) + 7 posts x 1 platform (14 credits) = **~28 credits**.
+**Credit cost:** 7 images (7 credits) + 7 posts x 1 platform (7 credits) = **~14 credits**.
 
 ## Pipeline 5: UGC Product Review
 
@@ -467,7 +467,7 @@ echo "Music: $MUSIC_URL"
 # The user can combine these via a video editor or the agentic chat merge tool
 ```
 
-**Credit cost:** Music (~10) + 4 scene expansions (0) + Storyboard 20s (~120) = **~130 credits**.
+**Credit cost:** Music (~5) + 4 scene expansions (0) + Storyboard 20s (~60) = **~65 credits**.
 
 ## Error Recovery
 

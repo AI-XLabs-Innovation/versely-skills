@@ -1,6 +1,6 @@
 # API Reference — Versely Social
 
-Base URL: `$VERSELY_API_URL` (default: `https://api.versely.app`)
+Base URL: `$VERSELY_API_URL` (default: `https://api.versely.studio`)
 
 All endpoints require `Authorization: Bearer $VERSELY_API_KEY` header. API key must have the `post` scope.
 
@@ -187,7 +187,7 @@ curl -X POST "$VERSELY_API_URL/api/v1/postbridge/posts" \
   -H "Content-Type: application/json" \
   -d '{
     "caption": "New collection dropping soon! Stay tuned.",
-    "media_urls": ["https://cdn.versely.app/image123.jpg"],
+    "media_urls": ["https://cdn.versely.studio/image123.jpg"],
     "account_ids": ["uuid-instagram", "uuid-tiktok"]
   }'
 ```
@@ -200,7 +200,7 @@ curl -X POST "$VERSELY_API_URL/api/v1/postbridge/posts" \
   -H "Content-Type: application/json" \
   -d '{
     "caption": "Happy Monday! Start the week strong.",
-    "media_urls": ["https://cdn.versely.app/image456.jpg"],
+    "media_urls": ["https://cdn.versely.studio/image456.jpg"],
     "account_ids": ["uuid-instagram"],
     "scheduled_at": "2026-03-03T08:00:00Z"
   }'
@@ -215,10 +215,10 @@ curl -X POST "$VERSELY_API_URL/api/v1/postbridge/posts" \
   -d '{
     "caption": "Swipe through our top picks!",
     "media_urls": [
-      "https://cdn.versely.app/img1.jpg",
-      "https://cdn.versely.app/img2.jpg",
-      "https://cdn.versely.app/img3.jpg",
-      "https://cdn.versely.app/img4.jpg"
+      "https://cdn.versely.studio/img1.jpg",
+      "https://cdn.versely.studio/img2.jpg",
+      "https://cdn.versely.studio/img3.jpg",
+      "https://cdn.versely.studio/img4.jpg"
     ],
     "account_ids": ["uuid-instagram"]
   }'

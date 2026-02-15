@@ -2,21 +2,21 @@
 
 ## Quick Reference (always read this)
 
-Credits formula: `ceil(USD_price × 20)`. Costs may vary by resolution/duration.
+API keys get 2x pricing (half of in-app). Formula: `ceil(USD_price × 10)`.
 
 ### Top Image Models
 
 | Model | Speed | Quality | ~Credits | Input |
 |-------|-------|---------|----------|-------|
-| Flux Pro Ultra | Fast | Best | 2 | Text |
-| Imagen 4 Ultra | Fast | Excellent | 2 | Text |
+| Flux Pro Ultra | Fast | Best | 1 | Text |
+| Imagen 4 Ultra | Fast | Excellent | 1 | Text |
 | Imagen 4 | Fast | Great | 1 | Text |
 | Imagen 4 Fast | Fastest | Good | 1 | Text |
 | GPT Image 1 | Fast | Great | 1 | Text |
-| Midjourney V7 | Medium | Best | 2 | Text |
+| Midjourney V7 | Medium | Best | 1 | Text |
 | Seedream 4.0 | Fast | Great | 1 | Text |
 | Recraft V3 | Fast | Great | 1 | Text |
-| Ideogram V3 | Medium | Excellent | 1-2 | Text |
+| Ideogram V3 | Medium | Excellent | 1 | Text |
 | NANO Banana | Fast | Good | 1 | Text |
 | Nano Banana Edit | Fast | Good | 1 | Text + Image |
 | GPT Image 1 Edit | Fast | Great | 1 | Text + Image |
@@ -29,25 +29,25 @@ Credits formula: `ceil(USD_price × 20)`. Costs may vary by resolution/duration.
 
 | Model | Speed | Quality | ~Credits (5s) | Input |
 |-------|-------|---------|---------------|-------|
-| Sora 2 Text to Video Pro | Slow | Best | 15-25 | Text |
-| Sora 2 Text to Video | Medium | Great | 10 | Text |
-| VEO 3.1 | Medium | Excellent | 4-8 | Text |
-| VEO 3.1 Fast | Fast | Good | 2-3 | Text |
-| Kling 2.5 Turbo | Medium | Great | 5 | Text |
-| Hailuo 02 | Medium | Good | 5 | Text |
-| Wan Video 2.5 T2V | Medium | Good | 5-15 | Text |
-| Pixverse V4 | Fast | Good | 3-8 | Text |
-| Sora 2 Image to Video | Slow | Best | 6 | Image |
-| Wan Video 2.5 I2V | Medium | Good | 5-15 | Image |
-| VEO First Last Frame | Medium | Excellent | 4-8 | 2 Images |
+| Sora 2 Text to Video Pro | Slow | Best | 8-13 | Text |
+| Sora 2 Text to Video | Medium | Great | 5 | Text |
+| VEO 3.1 | Medium | Excellent | 2-4 | Text |
+| VEO 3.1 Fast | Fast | Good | 1-2 | Text |
+| Kling 2.5 Turbo | Medium | Great | 3 | Text |
+| Hailuo 02 | Medium | Good | 3 | Text |
+| Wan Video 2.5 T2V | Medium | Good | 3-8 | Text |
+| Pixverse V4 | Fast | Good | 2-4 | Text |
+| Sora 2 Image to Video | Slow | Best | 3 | Image |
+| Wan Video 2.5 I2V | Medium | Good | 3-8 | Image |
+| VEO First Last Frame | Medium | Excellent | 2-4 | 2 Images |
 
 ### Music & Audio Models
 
 | Model | Speed | Quality | ~Credits | Notes |
 |-------|-------|---------|----------|-------|
-| Suno V5 | Medium | Best | ~10 | Latest, best quality |
-| Suno V4_5PLUS | Medium | Excellent | ~8 | Great for instrumentals |
-| Suno V4_5 | Medium | Great | ~6 | Good all-around |
+| Suno V5 | Medium | Best | ~5 | Latest, best quality |
+| Suno V4_5PLUS | Medium | Excellent | ~4 | Great for instrumentals |
+| Suno V4_5 | Medium | Great | ~3 | Good all-around |
 | Suno V4 | Fast | Good | ~4 | Reliable |
 | Chatterbox TTS | Fast | Good | ~1/s | Text-to-speech |
 | Eleven Labs Speech Turbo | Fast | Best | ~2/s | Premium TTS |

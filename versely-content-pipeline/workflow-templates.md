@@ -305,18 +305,18 @@ done
 
 ## Credit Calculator
 
-Quick formula to estimate pipeline costs:
+Quick formula to estimate pipeline costs (API keys get 2x pricing — half of in-app):
 
 ```
-Total = (num_images × image_cost) + (num_videos × video_cost) + (num_music × music_cost) + (num_platforms × 2)
+Total = (num_images × image_cost) + (num_videos × video_cost) + (num_music × music_cost) + (num_platforms × 1)
 ```
 
 | Variable | Typical Value |
 |----------|---------------|
-| `image_cost` | 2 (Flux Pro Ultra) |
-| `video_cost` | 10 (Sora 2, 5s) |
-| `music_cost` | 10 (Suno V5) |
-| `platform_cost` | 2 per platform |
+| `image_cost` | 1 (Flux Pro Ultra) |
+| `video_cost` | 5 (Sora 2, 5s) |
+| `music_cost` | 5 (Suno V5) |
+| `platform_cost` | 1 per platform |
 | UGC processing | 0 |
 | Slideshow video conversion | 0 |
 | Scene expansion | 0 |

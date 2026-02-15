@@ -1,6 +1,6 @@
 # API Reference — Versely Movie
 
-Base URL: `$VERSELY_API_URL` (default: `https://api.versely.app`)
+Base URL: `$VERSELY_API_URL` (default: `https://api.versely.studio`)
 
 All endpoints require `Authorization: Bearer $VERSELY_API_KEY`.
 
@@ -183,11 +183,11 @@ List available story/storyboard models.
 
 ## Credit Costs
 
-| Model | Billing | ~Credits |
-|-------|---------|----------|
-| Sora 2 Pro Storyboard | $0.30/second | 6/second |
-| Kling 2.5 Turbo | $0.21 base + $0.042/s | ~5 for 5s |
-| VEO 3.1 First Last Frame | $0.10-$0.15 flat | 2-3 |
+| Model | Billing | ~Credits (API) |
+|-------|---------|----------------|
+| Sora 2 Pro Storyboard | $0.30/second | 3/second |
+| Kling 2.5 Turbo | $0.21 base + $0.042/s | ~3 for 5s |
+| VEO 3.1 First Last Frame | $0.10-$0.15 flat | 1-2 |
 
 ---
 

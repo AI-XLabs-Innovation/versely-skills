@@ -1,6 +1,6 @@
 # API Reference — Versely UGC
 
-Base URL: `$VERSELY_API_URL` (default: `https://api.versely.app`)
+Base URL: `$VERSELY_API_URL` (default: `https://api.versely.studio`)
 
 All endpoints require `Authorization: Bearer $VERSELY_API_KEY`.
 

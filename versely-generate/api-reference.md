@@ -1,6 +1,6 @@
 # API Reference — Versely Generate
 
-Base URL: `$VERSELY_API_URL` (default: `https://api.versely.app`)
+Base URL: `$VERSELY_API_URL` (default: `https://api.versely.studio`)
 
 All endpoints require `Authorization: Bearer $VERSELY_API_KEY` header.
 
@@ -325,8 +325,8 @@ Check generation status.
   "status": "generating | completed | failed",
   "type": "images | videos | audios | music",
   "model": "Flux Pro Ultra",
-  "result_url": "https://cdn.versely.app/...",
-  "result_urls": ["https://cdn.versely.app/..."],
+  "result_url": "https://cdn.versely.studio/...",
+  "result_urls": ["https://cdn.versely.studio/..."],
   "created_at": "2026-02-15T10:00:00Z"
 }
 ```

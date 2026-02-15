@@ -10,7 +10,7 @@ allowed-tools: Bash, Read
 metadata:
   agentskills.io:
     category: content-creation
-    homepage: https://versely.app
+    homepage: https://versely.studio
     tags: ["ugc", "captions", "video-overlay", "user-generated-content"]
 ---
 
@@ -22,7 +22,7 @@ Create UGC-style videos: overlay talking-head video on product footage, add styl
 
 ```bash
 VERSELY_API_KEY="vsk_..."
-VERSELY_API_URL="https://api.versely.app"
+VERSELY_API_URL="https://api.versely.studio"
 ```
 
 Do NOT send `user_id` — the API key resolves the user server-side.

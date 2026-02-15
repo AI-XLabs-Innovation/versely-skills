@@ -10,7 +10,7 @@ allowed-tools: Bash, Read
 metadata:
   agentskills.io:
     category: content-creation
-    homepage: https://versely.app
+    homepage: https://versely.studio
     tags: ["image-generation", "video-generation", "music-generation", "ai-content"]
 ---
 
@@ -25,7 +25,7 @@ All requests use a scoped API key (`vsk_` prefix). Never hardcode keys — alway
 ```bash
 # Required environment variables
 VERSELY_API_KEY="vsk_..."          # Create at Settings > API Keys
-VERSELY_API_URL="https://api.versely.app"  # Default base URL
+VERSELY_API_URL="https://api.versely.studio"  # Default base URL
 ```
 
 Every request includes:
@@ -45,20 +45,20 @@ curl -s "$VERSELY_API_URL/api/v1/user/me" \
   -H "Authorization: Bearer $VERSELY_API_KEY" | jq '.credits'
 ```
 
-**Approximate credit costs** (formula: USD price x 20, rounded up):
+**Approximate credit costs** (API keys get 2x pricing — half of in-app costs):
 
 | Type | Model | Credits |
 |------|-------|---------|
 | Image | Imagen 4, GPT Image 1 | ~1 |
-| Image | Flux Pro Ultra, Imagen 4 Ultra | ~2 |
-| Image | Midjourney V7 | ~2 |
-| Video (5s) | Sora 2 Text to Video | ~10 |
-| Video (5s) | VEO 3.1 (no audio) | ~4 |
-| Video (5s) | VEO 3.1 (with audio) | ~8 |
-| Video (5s) | Kling 2.5 Turbo | ~5 |
-| Music | Suno V5 | ~10 |
+| Image | Flux Pro Ultra, Imagen 4 Ultra | ~1 |
+| Image | Midjourney V7 | ~1 |
+| Video (5s) | Sora 2 Text to Video | ~5 |
+| Video (5s) | VEO 3.1 (no audio) | ~2 |
+| Video (5s) | VEO 3.1 (with audio) | ~4 |
+| Video (5s) | Kling 2.5 Turbo | ~3 |
+| Music | Suno V5 | ~5 |
 | Upscale | Topaz Upscale | ~1 |
-| Social Post | Per platform | 2 |
+| Social Post | Per platform | 1 |
 
 If `credits < estimated cost`, inform the user BEFORE generating.
 

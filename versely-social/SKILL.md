@@ -9,7 +9,7 @@ allowed-tools: Bash, Read
 metadata:
   agentskills.io:
     category: social-media
-    homepage: https://versely.app
+    homepage: https://versely.studio
     tags: ["social-media", "posting", "scheduling", "instagram", "tiktok"]
 ---
 
@@ -25,7 +25,7 @@ All requests use a scoped API key (`vsk_` prefix). The key must have the `post` 
 
 ```bash
 VERSELY_API_KEY="vsk_..."
-VERSELY_API_URL="https://api.versely.app"
+VERSELY_API_URL="https://api.versely.studio"
 ```
 
 Every request includes:
@@ -40,7 +40,7 @@ Every request includes:
 
 ### 1. Check Credits
 
-Each post costs **2 credits per platform**. Posting to 3 platforms = 6 credits.
+Each post costs **1 credit per platform** via API (2 credits in-app). Posting to 3 platforms = 3 credits.
 
 ```bash
 curl -s "$VERSELY_API_URL/api/v1/user/me" \
@@ -242,8 +242,8 @@ curl -X DELETE "$VERSELY_API_URL/api/v1/postbridge/accounts/ACCOUNT_ID" \
 
 ## Credit Costs
 
-- **2 credits per platform** per post
-- Posting to 3 platforms = 6 credits
+- **1 credit per platform** per post via API (2 credits in-app)
+- Posting to 3 platforms = 3 credits
 - Scheduling costs the same as immediate posting (charged at schedule time)
 - Credits are refunded automatically if the PostBridge API call fails
 
