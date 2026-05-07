@@ -4,10 +4,6 @@
 # each destination skill first so deleted/renamed source files don't
 # linger in the install.
 #
-# Note: versely-mcp is intentionally excluded — it is a Node MCP server,
-# not a Claude Code skill. Install it via your MCP client config (see
-# versely-mcp/README.md) instead of dropping it under ~/.claude/skills/.
-#
 # Usage (from any directory):
 #   powershell -ExecutionPolicy Bypass -File "d:\WorkPlace\Versely\versely-skills\sync-skills.ps1"
 #
