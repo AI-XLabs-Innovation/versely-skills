@@ -33,6 +33,8 @@ Best practices, format requirements, and tips for each supported platform.
 
 **Note:** TikTok auto-adds trending music to carousel posts created through the API.
 
+**Account types:** Connected TikTok accounts come back from `GET /api/v1/social/accounts` with `platform: "tiktok"` (personal) or `platform: "tiktok_business"` (TikTok Business / TikTok for Business). Both can post via the same `POST /api/v1/social/posts` endpoint — when filtering by platform, match either value.
+
 ## YouTube
 
 **Best formats:**

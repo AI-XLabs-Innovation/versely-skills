@@ -21,7 +21,7 @@ jobs:
           VERSELY_API_KEY: ${{ secrets.VERSELY_API_KEY }}
           VERSELY_API_URL: ${{ secrets.VERSELY_API_URL }}
         run: |
-          curl -s "${VERSELY_API_URL:-https://api.versely.app}/api/v1/agentic/models" \
+          curl -s "${VERSELY_API_URL:-https://api.versely.studio}/api/v1/agentic/models" \
             -H "Authorization: Bearer $VERSELY_API_KEY" \
             -o models-raw.json
 

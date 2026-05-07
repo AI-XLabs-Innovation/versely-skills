@@ -7,7 +7,7 @@ Real workflow examples using the Versely generation API.
 ```bash
 # 1. Check credits
 CREDITS=$(curl -s "$VERSELY_API_URL/api/v1/user/me" \
-  -H "Authorization: Bearer $VERSELY_API_KEY" | jq -r '.credits')
+  -H "Authorization: Bearer $VERSELY_API_KEY" | jq -r '.user.credits')
 echo "Available credits: $CREDITS"
 
 # 2. Generate the image
@@ -196,12 +196,12 @@ for i in $(seq 1 30); do
 done
 
 # 3. Get social accounts
-ACCOUNTS=$(curl -s "$VERSELY_API_URL/api/v1/postbridge/accounts" \
+ACCOUNTS=$(curl -s "$VERSELY_API_URL/api/v1/social/accounts" \
   -H "Authorization: Bearer $VERSELY_API_KEY")
 ACCOUNT_IDS=$(echo $ACCOUNTS | jq '[.accounts[].id]')
 
 # 4. Post to all platforms
-curl -X POST "$VERSELY_API_URL/api/v1/postbridge/posts" \
+curl -X POST "$VERSELY_API_URL/api/v1/social/posts" \
   -H "Authorization: Bearer $VERSELY_API_KEY" \
   -H "Content-Type: application/json" \
   -d "{

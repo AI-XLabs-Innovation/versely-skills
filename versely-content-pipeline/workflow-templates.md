@@ -2,6 +2,13 @@
 
 Reusable templates with variable placeholders. Replace `{{variables}}` with actual values.
 
+**Note on `user_id`:** Most endpoints resolve the user from the API key — do NOT send `user_id`. The exceptions are `/api/v1/captions/auto` and `/api/v1/captions/tts-voiceover`, which REQUIRE `user_id` in the body. Templates that call those endpoints accept a `{{USER_ID}}` variable. Resolve it once at the top of your script:
+
+```bash
+USER_ID=$(curl -s "$VERSELY_API_URL/api/v1/user/me" \
+  -H "Authorization: Bearer $VERSELY_API_KEY" | jq -r '.user.id')
+```
+
 ---
 
 ## Template: Quick Generate & Post
@@ -29,12 +36,12 @@ for i in $(seq 1 60); do
 done
 
 # Post (filter accounts by platform)
-ACCOUNTS=$(curl -s "$VERSELY_API_URL/api/v1/postbridge/accounts" \
+ACCOUNTS=$(curl -s "$VERSELY_API_URL/api/v1/social/accounts" \
   -H "Authorization: Bearer $VERSELY_API_KEY")
 # {{PLATFORMS}} example: "instagram", "tiktok"
 IDS=$(echo $ACCOUNTS | jq '[.accounts[] | select(.platform == "{{PLATFORMS}}") | .id]')
 
-curl -X POST "$VERSELY_API_URL/api/v1/postbridge/posts" \
+curl -X POST "$VERSELY_API_URL/api/v1/social/posts" \
   -H "Authorization: Bearer $VERSELY_API_KEY" \
   -H "Content-Type: application/json" \
   -d "{\"caption\": \"{{CAPTION}}\", \"media_urls\": [\"$URL\"], \"account_ids\": $IDS}"
@@ -81,10 +88,10 @@ VID=$(curl -s -X POST "$VERSELY_API_URL/api/v1/slideshow/$SSID/video" \
 VURL=$(echo $VID | jq -r '.data.video_url')
 
 # Post as reel
-ACCOUNTS=$(curl -s "$VERSELY_API_URL/api/v1/postbridge/accounts" \
+ACCOUNTS=$(curl -s "$VERSELY_API_URL/api/v1/social/accounts" \
   -H "Authorization: Bearer $VERSELY_API_KEY")
 RIDS=$(echo $ACCOUNTS | jq '[.accounts[] | select(.platform == "instagram" or .platform == "tiktok") | .id]')
-curl -X POST "$VERSELY_API_URL/api/v1/postbridge/posts" \
+curl -X POST "$VERSELY_API_URL/api/v1/social/posts" \
   -H "Authorization: Bearer $VERSELY_API_KEY" \
   -H "Content-Type: application/json" \
   -d "{\"caption\": \"{{CAPTION}}\", \"media_urls\": [\"$VURL\"], \"account_ids\": $RIDS}"
@@ -123,11 +130,11 @@ for RID in "${RIDS[@]}"; do
 done
 
 MEDIA=$(printf '%s\n' "${URLS[@]}" | jq -R . | jq -s .)
-IG=$(curl -s "$VERSELY_API_URL/api/v1/postbridge/accounts" \
+IG=$(curl -s "$VERSELY_API_URL/api/v1/social/accounts" \
   -H "Authorization: Bearer $VERSELY_API_KEY" | \
   jq -r '[.accounts[] | select(.platform == "instagram") | .id][0]')
 
-curl -X POST "$VERSELY_API_URL/api/v1/postbridge/posts" \
+curl -X POST "$VERSELY_API_URL/api/v1/social/posts" \
   -H "Authorization: Bearer $VERSELY_API_KEY" \
   -H "Content-Type: application/json" \
   -d "{\"caption\": \"{{CAPTION}}\", \"media_urls\": $MEDIA, \"account_ids\": [\"$IG\"]}"
@@ -139,7 +146,7 @@ curl -X POST "$VERSELY_API_URL/api/v1/postbridge/posts" \
 
 Product video + talking head overlay + auto-captions.
 
-**Variables:** `{{PRODUCT_PROMPT}}`, `{{TALKING_HEAD_URL}}`, `{{OVERLAY_POSITION}}`, `{{CAPTION_STYLE}}`
+**Variables:** `{{PRODUCT_PROMPT}}`, `{{TALKING_HEAD_URL}}`, `{{OVERLAY_POSITION}}`, `{{CAPTION_STYLE}}`, `{{USER_ID}}`
 
 ```bash
 # Budget: ~10 credits (video generation) + 0 (UGC processing)
@@ -173,7 +180,7 @@ UGCVID=$(echo $OVL | jq -r '.data.video_url')
 CAP=$(curl -s -X POST "$VERSELY_API_URL/api/v1/captions/auto" \
   -H "Authorization: Bearer $VERSELY_API_KEY" \
   -H "Content-Type: application/json" \
-  -d "{\"video_url\": \"$UGCVID\", \"words_per_segment\": 3, \"style\": {{CAPTION_STYLE}}}")
+  -d "{\"user_id\": \"{{USER_ID}}\", \"video_url\": \"$UGCVID\", \"words_per_segment\": 3, \"style\": {{CAPTION_STYLE}}}")
 echo "Final: $(echo $CAP | jq -r '.video_url')"
 ```
 
@@ -188,7 +195,7 @@ echo "Final: $(echo $CAP | jq -r '.video_url')"
 ```bash
 # Budget: 7 * 2 (images) + 7 * 2 (posts) = ~28 credits
 
-ACCT=$(curl -s "$VERSELY_API_URL/api/v1/postbridge/accounts" \
+ACCT=$(curl -s "$VERSELY_API_URL/api/v1/social/accounts" \
   -H "Authorization: Bearer $VERSELY_API_KEY" | \
   jq -r "[.accounts[] | select(.platform == \"{{PLATFORM}}\") | .id][0]")
 
@@ -212,7 +219,7 @@ for i in $(seq 0 6); do
   SCHED=$(date -j -v+${i}d -f "%Y-%m-%d" "{{START_DATE}}" "+%Y-%m-%dT${TIMES[$i]}:00Z" 2>/dev/null || \
     date -d "{{START_DATE}} + $i days" "+%Y-%m-%dT${TIMES[$i]}:00Z")
 
-  curl -s -X POST "$VERSELY_API_URL/api/v1/postbridge/posts" \
+  curl -s -X POST "$VERSELY_API_URL/api/v1/social/posts" \
     -H "Authorization: Bearer $VERSELY_API_KEY" \
     -H "Content-Type: application/json" \
     -d "{
@@ -232,7 +239,7 @@ done
 
 Generate a video, add AI voiceover with auto-synced captions.
 
-**Variables:** `{{VIDEO_PROMPT}}`, `{{VOICEOVER_TEXT}}`, `{{VOICE_ID}}`, `{{CAPTION}}`
+**Variables:** `{{VIDEO_PROMPT}}`, `{{VOICEOVER_TEXT}}`, `{{VOICE_ID}}`, `{{CAPTION}}`, `{{USER_ID}}`
 
 ```bash
 # Budget: ~10 credits (video) + 0 (TTS/captions) + 4 (2 platforms)
@@ -255,6 +262,7 @@ TTS=$(curl -s -X POST "$VERSELY_API_URL/api/v1/captions/tts-voiceover" \
   -H "Authorization: Bearer $VERSELY_API_KEY" \
   -H "Content-Type: application/json" \
   -d "{
+    \"user_id\": \"{{USER_ID}}\",
     \"video_url\": \"$VID\",
     \"text\": \"{{VOICEOVER_TEXT}}\",
     \"voice_id\": \"{{VOICE_ID}}\",
@@ -263,11 +271,11 @@ TTS=$(curl -s -X POST "$VERSELY_API_URL/api/v1/captions/tts-voiceover" \
 FINAL=$(echo $TTS | jq -r '.video_url')
 
 # Post to short-form platforms
-ACCTS=$(curl -s "$VERSELY_API_URL/api/v1/postbridge/accounts" \
+ACCTS=$(curl -s "$VERSELY_API_URL/api/v1/social/accounts" \
   -H "Authorization: Bearer $VERSELY_API_KEY" | \
   jq '[.accounts[] | select(.platform == "instagram" or .platform == "tiktok") | .id]')
 
-curl -X POST "$VERSELY_API_URL/api/v1/postbridge/posts" \
+curl -X POST "$VERSELY_API_URL/api/v1/social/posts" \
   -H "Authorization: Bearer $VERSELY_API_KEY" \
   -H "Content-Type: application/json" \
   -d "{\"caption\": \"{{CAPTION}}\", \"media_urls\": [\"$FINAL\"], \"account_ids\": $ACCTS}"

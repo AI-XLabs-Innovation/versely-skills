@@ -16,7 +16,7 @@ Create a new slideshow with AI-generated images.
 |-------|------|----------|-------------|
 | `prompt` | string | Yes | Main prompt for all images |
 | `num_images` | number | No | 0-20, default 5 |
-| `model` | string | No | Default: `"Flux Pro Ultra"`. Also: `"Recraft V3 Image"`, `"Reve Text to Image"`, `"Imagen 4 Ultra"` |
+| `model` | string | No | Default: `"Flux Pro Ultra"`. Also: `"Recraft V3 Image"`, `"Reve Text to Image"`, `"Imagen 4 Ultra"`, `"Nano Banana Pro"`, `"GPT Image 2"`, `"Gemini"`. Live list at `GET /api/v1/slideshow/models`. |
 | `content_type` | string | No | `"reel"` (9:16), `"story"` (9:16), `"post"` (1:1), `"landscape"` (16:9), `"portrait"` (4:5) |
 | `aspect_ratio` | string | No | Override content_type: `"9:16"`, `"16:9"`, `"1:1"`, `"4:5"` |
 | `style` | string | No | Visual style: `"cinematic"`, `"minimal"`, etc. |
@@ -225,10 +225,12 @@ Convert slideshow to video.
 | `duration_per_image` | number | No | 0.5-30 seconds, default: 3 |
 | `transition` | string | No | `"none"` (default) \| `"fade"` \| `"crossfade"` |
 | `output_resolution` | string | No | `"720p"` \| `"1080p"` (default) \| `"4k"` |
+| `aspect_ratio` | string | No | `"reel"` (default) \| `"post"` \| `"landscape"` \| `"portrait"` \| `"story"` |
 | `use_edited_images` | boolean | No | Use text-overlaid versions. Default: `false` |
+| `audio_url` | string | No | Generic audio URL (used when neither voiceover nor music is provided) |
 | `voiceover_url` | string | No | Voiceover audio (100% volume) |
 | `music_url` | string | No | Background music (30% volume) |
-| `aspect_ratio` | string | No | Override slideshow aspect ratio |
+| `overlays` | array | No | Optional text-overlay objects (same shape as `/text-overlay`) applied during video creation — lets you skip the separate `/text-overlay` call |
 
 ### Response
 
@@ -291,7 +293,7 @@ Get supported models and aspect ratios.
 {
   "success": true,
   "data": {
-    "models": ["Flux Pro Ultra", "Recraft V3 Image", "Reve Text to Image", "Imagen 4 Ultra"],
+    "models": ["Flux Pro Ultra", "Recraft V3 Image", "Reve Text to Image", "Imagen 4 Ultra", "Nano Banana Pro", "GPT Image 2", "Gemini"],
     "aspect_ratios": {
       "reel": "9:16",
       "story": "9:16",
@@ -311,7 +313,8 @@ Get supported models and aspect ratios.
 | Scope | Limit |
 |-------|-------|
 | Default (per API key) | 60 req/min |
-| Generation endpoints | 20 req/min |
+
+`/slideshow/*` endpoints are NOT covered by the cost-sensitive rate limiter — only the per-API-key default applies.
 
 ## Error Codes
 
@@ -319,8 +322,8 @@ Get supported models and aspect ratios.
 |--------|---------|
 | 400 | Missing required fields |
 | 401 | Invalid/expired API key |
-| 402 | Insufficient credits |
-| 403 | API key lacks scope |
+| 402 | Per-call credit deduction failed (balance dropped between entry and deduction) |
+| 403 | API key lacks the `slideshow` scope, OR account balance ≤ 0 at request entry, OR `user_id` mismatch |
 | 404 | Slideshow not found |
 | 429 | Rate limited |
 | 500 | Server error |

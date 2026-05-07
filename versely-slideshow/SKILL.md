@@ -35,6 +35,12 @@ Every request:
 
 Do NOT send `user_id` — the API key resolves the user server-side.
 
+## Required API Key Scope
+
+**Scope:** `slideshow`. Covers all `/slideshow/*` endpoints (create, text-overlay, video conversion, Pinterest flows, etc.).
+
+Create a key with `{"scopes": ["slideshow"]}` via `POST /api/v1/auth/api-keys` (or pick `slideshow` in the dashboard). If your slideshow workflow also posts to social, add `post` and/or `manage_accounts`. Live scope catalog: `GET /api/v1/auth/api-keys/scopes`.
+
 ## Step 1: Create a Slideshow
 
 **Endpoint:** `POST /api/v1/slideshow/create`
@@ -59,7 +65,7 @@ echo "Slideshow ID: $SLIDESHOW_ID"
 **Key fields:**
 - `prompt` (required): Main description for all images
 - `num_images` (optional): 0-20, default 5. Use 0 for upload-only slideshows.
-- `model` (optional): `"Flux Pro Ultra"` (default) | `"Recraft V3 Image"` | `"Reve Text to Image"` | `"Imagen 4 Ultra"`
+- `model` (optional): `"Flux Pro Ultra"` (default) | `"Recraft V3 Image"` | `"Reve Text to Image"` | `"Imagen 4 Ultra"` | `"Nano Banana Pro"` | `"GPT Image 2"` | `"Gemini"`. Live list at `GET /api/v1/slideshow/models`.
 - `content_type` (optional): Controls aspect ratio
   - `"reel"` → 9:16 (Instagram/TikTok Reels) — **default**
   - `"story"` → 9:16 (Stories)
@@ -153,12 +159,14 @@ curl -X POST "$VERSELY_API_URL/api/v1/slideshow/$SLIDESHOW_ID/video" \
 
 **Key fields:**
 - `duration_per_image` (optional): 0.5-30 seconds, default 3
-- `transition` (optional): `"none"` | `"fade"` | `"crossfade"` (default: `"none"`)
+- `transition` (optional): `"none"` (default) | `"fade"` | `"crossfade"`
 - `output_resolution` (optional): `"720p"` | `"1080p"` (default) | `"4k"`
+- `aspect_ratio` (optional): `"reel"` (9:16, default) | `"post"` (1:1) | `"landscape"` (16:9) | `"portrait"` (4:5) | `"story"` (9:16)
 - `use_edited_images` (optional): `true` to use text-overlaid versions
+- `audio_url` (optional): Generic audio URL (used when neither voiceover nor music is supplied)
 - `voiceover_url` (optional): Voiceover audio URL (plays at 100% volume)
 - `music_url` (optional): Background music URL (plays at 30% volume)
-- `aspect_ratio` (optional): Override slideshow's aspect ratio
+- `overlays` (optional): Array of text-overlay objects to apply during video creation in one shot — same shape as the `/text-overlay` endpoint, lets you skip the separate Step 2 call
 
 **Response:**
 ```json
@@ -258,6 +266,112 @@ curl -s "$VERSELY_API_URL/api/v1/slideshow/models" \
   -H "Authorization: Bearer $VERSELY_API_KEY"
 ```
 
+## Automation Endpoints
+
+For most users, the four automation endpoints below replace the manual Step 1–3 pipeline. They generate prompts, images, and overlays in a single call.
+
+### Create Automated Slideshow (AI plans + generates + overlays)
+
+**Endpoint:** `POST /api/v1/slideshow/create-automated`
+
+Best for: "8 slides about X" — Gemini plans the slides (image prompt + caption text per slide), the chosen model generates images, overlays are applied, all in one request.
+
+```bash
+curl -X POST "$VERSELY_API_URL/api/v1/slideshow/create-automated" \
+  -H "Authorization: Bearer $VERSELY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "8 slides about celebrity couples who broke up because of cheating",
+    "num_images": 8,
+    "model": "Flux Pro Ultra",
+    "content_type": "reel",
+    "text_style": {
+      "font_family": "Arial",
+      "font_size": 0.06,
+      "background": "gradient",
+      "stroke_color": "#000000",
+      "stroke_width": 2
+    }
+  }'
+```
+
+Response is the standard slideshow shape with `images[]` already overlaid.
+
+### Caption-In-Image Slideshow
+
+**Endpoint:** `POST /api/v1/slideshow/create-caption-in-image`
+
+Burns the caption directly into each image at generation time (rather than overlaying afterward), producing more naturally integrated text. Body shape is the same as `create-automated`.
+
+### Pinterest-Sourced Automated Slideshow
+
+Three flavors:
+
+```bash
+# Full automation: Pinterest-search + plan + assemble in one call
+curl -X POST "$VERSELY_API_URL/api/v1/slideshow/create-pinterest-auto" \
+  -H "Authorization: Bearer $VERSELY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Vintage cottagecore kitchen aesthetic",
+    "num_images": 8,
+    "content_type": "reel"
+  }'
+
+# Two-step: plan first (returns suggested pins + captions), then confirm
+PLAN=$(curl -s -X POST "$VERSELY_API_URL/api/v1/slideshow/pinterest-plan" \
+  -H "Authorization: Bearer $VERSELY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "prompt": "Vintage kitchens", "num_images": 8 }')
+
+# user reviews/edits PLAN, then confirms to actually create the slideshow
+curl -X POST "$VERSELY_API_URL/api/v1/slideshow/pinterest-confirm" \
+  -H "Authorization: Bearer $VERSELY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "$PLAN"
+```
+
+### Upload-Auto (use existing images)
+
+**Endpoint:** `POST /api/v1/slideshow/create-upload-auto` (accepts up to ~100MB body)
+
+Skip image generation entirely — pass already-uploaded image URLs and Gemini auto-plans captions for them.
+
+```bash
+curl -X POST "$VERSELY_API_URL/api/v1/slideshow/create-upload-auto" \
+  -H "Authorization: Bearer $VERSELY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Productivity tips for remote workers",
+    "image_urls": [
+      "https://example.com/img1.jpg",
+      "https://example.com/img2.jpg",
+      "https://example.com/img3.jpg"
+    ],
+    "content_type": "reel"
+  }'
+```
+
+### Pinterest Discovery (raw)
+
+```bash
+# Search pins (cursor-paginated)
+curl "$VERSELY_API_URL/api/v1/slideshow/pinterest/search?query=cottagecore&cursor=" \
+  -H "Authorization: Bearer $VERSELY_API_KEY"
+
+# Single pin details
+curl "$VERSELY_API_URL/api/v1/slideshow/pinterest/pin?pin_id=123" \
+  -H "Authorization: Bearer $VERSELY_API_KEY"
+
+# A user's boards
+curl "$VERSELY_API_URL/api/v1/slideshow/pinterest/user/boards?username=jane" \
+  -H "Authorization: Bearer $VERSELY_API_KEY"
+
+# Pins on a board
+curl "$VERSELY_API_URL/api/v1/slideshow/pinterest/board?board_id=abc&cursor=" \
+  -H "Authorization: Bearer $VERSELY_API_KEY"
+```
+
 ## Full Pipeline Example
 
 Create a reel: generate images → add captions → convert to video → post to social:
@@ -302,11 +416,11 @@ VIDEO=$(curl -s -X POST "$VERSELY_API_URL/api/v1/slideshow/$SLIDESHOW_ID/video" 
 VIDEO_URL=$(echo $VIDEO | jq -r '.data.video_url')
 
 # 4. Post to social (using versely-social skill)
-ACCOUNTS=$(curl -s "$VERSELY_API_URL/api/v1/postbridge/accounts" \
+ACCOUNTS=$(curl -s "$VERSELY_API_URL/api/v1/social/accounts" \
   -H "Authorization: Bearer $VERSELY_API_KEY")
 ACCOUNT_IDS=$(echo $ACCOUNTS | jq '[.accounts[].id]')
 
-curl -X POST "$VERSELY_API_URL/api/v1/postbridge/posts" \
+curl -X POST "$VERSELY_API_URL/api/v1/social/posts" \
   -H "Authorization: Bearer $VERSELY_API_KEY" \
   -H "Content-Type: application/json" \
   -d "{
@@ -319,8 +433,8 @@ curl -X POST "$VERSELY_API_URL/api/v1/postbridge/posts" \
 ## Error Handling
 
 - **401 Unauthorized** — API key invalid or expired.
-- **402 Payment Required** — Insufficient credits for image generation.
-- **403 Forbidden** — API key lacks required scope.
+- **403 Forbidden** — API key lacks the `slideshow` scope, OR account balance ≤ 0 at request entry, OR `user_id` mismatch.
+- **402 Payment Required** — Per-call credit deduction failed during image generation or video conversion.
 - **429 Too Many Requests** — Rate limited. Check `X-RateLimit-Reset`.
 - **Partial success** — Some images may fail. Check `total_generated` vs `total_requested`.
 - **Video generation timeout** — FFmpeg has a 5-minute timeout. Reduce `num_images` or resolution.
@@ -328,8 +442,7 @@ curl -X POST "$VERSELY_API_URL/api/v1/postbridge/posts" \
 
 ## Rate Limits
 
-- Default: 60 requests/minute per API key
-- Generation: 20 requests/minute (cost-sensitive)
+- Default: 60 requests/minute per API key (the only limiter applied to `/slideshow/*` — there is no cost-sensitive limiter on slideshow endpoints)
 - Response headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
 
 For complete API schemas, see [api-reference.md](api-reference.md).

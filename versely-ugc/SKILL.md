@@ -25,7 +25,15 @@ VERSELY_API_KEY="vsk_..."
 VERSELY_API_URL="https://api.versely.studio"
 ```
 
-Do NOT send `user_id` — the API key resolves the user server-side.
+For `/api/v1/ugc/*` endpoints: do NOT send `user_id` — the API key resolves the user server-side.
+
+**Exception:** `/api/v1/captions/auto` and `/api/v1/captions/tts-voiceover` REQUIRE `user_id` in the body (the captions routes don't apply the `enforceUserId` middleware). `/captions/preview` and `/captions/edit` accept it but don't enforce it. To stay consistent, always include `user_id` when calling `/captions/*`.
+
+## Required API Key Scope
+
+**Scope:** `ugc`. Covers both `/ugc/*` (overlay, captions, background removal, compose) and `/captions/*` (auto, preview, edit, tts-voiceover).
+
+Create a key with `{"scopes": ["ugc"]}` via `POST /api/v1/auth/api-keys`. Live scope catalog: `GET /api/v1/auth/api-keys/scopes`.
 
 ## Video Overlay
 
@@ -50,9 +58,13 @@ curl -X POST "$VERSELY_API_URL/api/v1/ugc/add-video-overlay" \
 - `slideshow_video_url` (required): Base/background video URL
 - `overlay_video_url` (required): Video to overlay on top
 - `position` (required): `"top-left"` | `"top-right"` | `"bottom-left"` | `"bottom-right"` | `"center"`
-- `overlay_size` (optional): `"small"` (70%) | `"medium"` (90%, default) | `"large"` (110%)
+- `overlay_size` (optional): `"small"` (25%) | `"medium"` (30%, default) | `"large"` (45%) — overlay size as a percentage of the base video
+- `overlay_scale` (optional): Numeric scale percentage (20-200). Takes priority over `overlay_size` if provided.
+- `overlay_x`, `overlay_y` (optional): Custom pixel position; overrides `position` when both are set
 - `remove_black_background` (optional): Remove black pixels from overlay video
 - `background_image_url` (optional): Custom background when removing black
+- `key_similarity` (optional): 0.01-0.40, default 0.15 — how close a pixel must be to pure black to be removed (only used when `remove_black_background` is true)
+- `key_blend` (optional): 0.0-0.5, default 0.10 — softness of the alpha edge (only used when `remove_black_background` is true)
 
 **Response:**
 ```json
@@ -94,7 +106,9 @@ curl -X POST "$VERSELY_API_URL/api/v1/ugc/add-captions" \
 - `font_size` (optional): 8-200 pixels, default 48
 - `font_family` (optional): Font name, default `"Arial"`
 - `font_color` (optional): Color name (`white`, `black`, `red`, `yellow`, `green`, `blue`, `orange`, `cyan`) or hex (`#FF0000`). Default: `"white"`
-- `background` (optional): `"solid"` (50% opacity, default) | `"gradient"` (70% opacity) | `"none"`
+- `background` (optional): `"solid"` (~50% opacity black box, default) | `"gradient"` (~75% opacity black box) | `"none"`
+- `outline_width` (optional): Pixels — outline/stroke around text characters
+- `outline_color` (optional): Color name or hex for the text outline
 
 **Response:**
 ```json
@@ -122,6 +136,7 @@ curl -X POST "$VERSELY_API_URL/api/v1/captions/auto" \
   -H "Authorization: Bearer $VERSELY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
+    "user_id": "<your-user-uuid>",
     "video_url": "https://example.com/talking-video.mp4",
     "words_per_segment": 3,
     "return_srt": true,
@@ -208,6 +223,7 @@ curl -X POST "$VERSELY_API_URL/api/v1/captions/tts-voiceover" \
   -H "Authorization: Bearer $VERSELY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
+    "user_id": "<your-user-uuid>",
     "video_url": "https://example.com/background-video.mp4",
     "text": "This product is amazing. Let me show you why.",
     "voice_id": "Wise_Woman",
@@ -226,6 +242,78 @@ curl -X POST "$VERSELY_API_URL/api/v1/captions/tts-voiceover" \
   "segments": [...]
 }
 ```
+
+## Compose-With-Overlay (Multi-Clip Base)
+
+**Endpoint:** `POST /api/v1/ugc/compose-with-overlay`
+
+The newer, more flexible overlay endpoint. Stitches together a series of base clips (mix of images and videos), applies a single talking-head/overlay video on top, with per-clip trim ranges and unified output aspect.
+
+```bash
+curl -X POST "$VERSELY_API_URL/api/v1/ugc/compose-with-overlay" \
+  -H "Authorization: Bearer $VERSELY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "base_media": [
+      { "kind": "image", "url": "https://example.com/intro.jpg",   "duration_sec": 2 },
+      { "kind": "video", "url": "https://example.com/clipA.mp4",   "start_sec": 0, "end_sec": 5 },
+      { "kind": "video", "url": "https://example.com/clipB.mp4" }
+    ],
+    "overlay_video_url": "https://example.com/talking-head.mp4",
+    "position": "bottom-right",
+    "overlay_size": "medium",
+    "remove_black_background": true,
+    "output_aspect": "9:16"
+  }'
+```
+
+**Fields:**
+- `base_media` (required): Non-empty array of `{ kind: "image" | "video", url, duration_sec?, start_sec?, end_sec? }`
+  - Images: `duration_sec` (>0, ≤600s) is required — how long to hold the image
+  - Videos: `start_sec` and `end_sec` are optional but must be set together; `end_sec > start_sec`. If omitted, the full clip plays.
+- `overlay_video_url` (required): Talking-head / overlay video
+- `position`, `overlay_size`, `overlay_scale`, `overlay_x/y`, `remove_black_background`, `background_image_url`, `key_similarity`, `key_blend` — same as `/add-video-overlay`
+- `output_aspect` (optional): `"9:16"` (default) | `"16:9"` | `"1:1"` | `"4:5"`
+
+Use this instead of `/add-video-overlay` when your base is a mix of images and videos, or when you need per-clip trims.
+
+## Timestamped Captions (Pre-Computed Segments)
+
+**Endpoint:** `POST /api/v1/ugc/add-timestamped-captions`
+
+Burn captions onto a video using a pre-computed segment list (no STT runs). Use this when you already have transcript timing — e.g., from an external tool, manual edit, or chaining `/captions/preview` → human edit → burn.
+
+```bash
+curl -X POST "$VERSELY_API_URL/api/v1/ugc/add-timestamped-captions" \
+  -H "Authorization: Bearer $VERSELY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "<your-user-id>",
+    "video_url": "https://example.com/video.mp4",
+    "captions": [
+      { "start_sec": 0.0, "end_sec": 1.5, "text": "Hello world" },
+      { "start_sec": 1.5, "end_sec": 3.2, "text": "Welcome to the demo" }
+    ],
+    "caption_size": "medium",
+    "position": "bottom",
+    "font_color": "white",
+    "font_family": "Arial",
+    "outline_width": 2,
+    "outline_color": "black"
+  }'
+```
+
+**Fields:**
+- `user_id` (required) — `/ugc/*` enforces it via middleware, but the controller also validates it explicitly
+- `video_url` (required)
+- `captions` (required): Non-empty array of `{ start_sec, end_sec, text }`. `end_sec > start_sec`, text 1-200 chars
+- `caption_size` (optional): `small` | `medium` (default) | `large` | `xl`
+- `position` (optional): `top` | `middle` | `bottom` (default)
+- `font_color`, `font_family`, `outline_width`, `outline_color` — styling, same as static captions
+
+Errors: `400` for invalid timing/text; `402` for insufficient credits.
+
+This is the burn-side counterpart to `/captions/preview` (which produces but doesn't burn).
 
 ## Remove Black Background
 
@@ -300,11 +388,48 @@ FINAL_VIDEO=$(echo $CAPTIONED | jq -r '.data.video_url')
 echo "Final UGC video: $FINAL_VIDEO"
 ```
 
+## Avatar Discovery — `/api/v1/avatar/*`
+
+Read-only discovery endpoints for avatar-driven flows (HeyGen lipsync, talking-head presets). Use these to populate avatar pickers before calling `/generate/video` (with a HeyGen lipsync model) or `/generate/lipsync`.
+
+**Scope note:** `/avatar/*` is mounted under the `generate` scope, not `ugc`. If your UGC pipeline uses avatars, your API key needs **both** `ugc` AND `generate` scopes.
+
+```bash
+# Versely's curated avatar URL list (cached in Redis)
+curl "$VERSELY_API_URL/api/v1/avatar" \
+  -H "Authorization: Bearer $VERSELY_API_KEY"
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    { "name": "...", "url": "https://..." },
+    ...
+  ],
+  "message": "Avatar URLs fetched successfully"
+}
+```
+
+```bash
+# HeyGen avatars — the canonical name list FAL accepts, plus HeyGen preview images
+curl "$VERSELY_API_URL/api/v1/avatar/heygen" \
+  -H "Authorization: Bearer $VERSELY_API_KEY"
+
+# HeyGen voices — FAL-accepted voice names with HeyGen metadata
+curl "$VERSELY_API_URL/api/v1/avatar/heygen/voices" \
+  -H "Authorization: Bearer $VERSELY_API_KEY"
+```
+
+The `name` returned by `/avatar/heygen` is what you pass as the `avatar_name` parameter when generating HeyGen lipsync videos via `/generate/video`. Same for `voice_name` from `/avatar/heygen/voices`. Both are cached server-side; FAL's schema is the source of truth for which names are actually valid (the response intersects FAL + HeyGen).
+
 ## Error Handling
 
 - **401 Unauthorized** — API key invalid or expired.
-- **400 Bad Request** — Missing required fields (video_url, caption_text, position).
-- **403 Forbidden** — API key lacks required scope.
+- **400 Bad Request** — Missing required fields (e.g., `video_url`, `caption_text`, `position`; for `/captions/auto` and `/captions/tts-voiceover` also `user_id`).
+- **403 Forbidden** — API key lacks the `ugc` scope (covers both `/ugc/*` and `/captions/*`), OR account balance ≤ 0 at request entry, OR `user_id` mismatch (for `/ugc/*`).
+- **402 Payment Required** — Per-call flat-cost deduction failed: `/ugc/add-video-overlay` (10), `/ugc/add-captions` (5), `/ugc/remove-black-background` (10). Captions endpoints (`/captions/auto`, `/captions/preview`, `/captions/edit`, `/captions/tts-voiceover`) do not deduct credits.
 - **429 Too Many Requests** — Rate limited. Check `X-RateLimit-Reset`.
 - **500 Internal Server Error** — FFmpeg processing failed. Retry once.
 - **File too large** — Max 500MB per video download.

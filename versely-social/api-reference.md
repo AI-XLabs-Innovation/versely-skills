@@ -2,18 +2,26 @@
 
 Base URL: `$VERSELY_API_URL` (default: `https://api.versely.studio`)
 
-All endpoints require `Authorization: Bearer $VERSELY_API_KEY` header. API key must have the `post` scope.
+All endpoints require `Authorization: Bearer $VERSELY_API_KEY` header.
+
+**Scopes:** This skill spans two scopes:
+- `post` — `/posts`, `/posts/:id`, `/preview`
+- `manage_accounts` — `/auth-url`, `/accounts`, `/accounts/refresh`, `/accounts/:id`
+
+A key that uses every endpoint in this reference needs both. Live scope catalog: `GET /api/v1/auth/api-keys/scopes`.
 
 ---
 
-## GET /api/v1/postbridge/connect-url
+## GET /api/v1/social/auth-url
 
-Get the PostBridge URL for connecting new social accounts.
+Get a per-platform OAuth URL for users to connect their social account.
 
 ### Query Parameters
 
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
+| `platform` | string | Yes | Platform to connect: `instagram`, `tiktok`, `youtube`, `twitter`, `facebook`, `linkedin`, `pinterest`, `bluesky`, `threads` |
+| `connection_type` | string | No | Instagram only: `facebook` (Login with Facebook) or `instagram` (Login with Instagram) |
 | `redirect_url` | string | No | URL to redirect after connecting |
 
 ### Response
@@ -21,20 +29,20 @@ Get the PostBridge URL for connecting new social accounts.
 ```json
 {
   "success": true,
-  "connect_url": "https://app.post-bridge.com/connect?api_key=...&redirect_url=..."
+  "url": "https://app.post-bridge.com/connect?..."
 }
 ```
 
 ### curl Example
 
 ```bash
-curl -s "$VERSELY_API_URL/api/v1/postbridge/connect-url" \
+curl -s "$VERSELY_API_URL/api/v1/social/auth-url?platform=instagram" \
   -H "Authorization: Bearer $VERSELY_API_KEY"
 ```
 
 ---
 
-## GET /api/v1/postbridge/accounts
+## GET /api/v1/social/accounts
 
 List the authenticated user's connected social media accounts.
 
@@ -46,7 +54,7 @@ List the authenticated user's connected social media accounts.
   "accounts": [
     {
       "id": "uuid-1234-5678",
-      "postbridge_account_id": "12345",
+      "external_account_id": "12345",
       "platform": "instagram",
       "username": "johndoe",
       "profile_image_url": "https://...",
@@ -60,15 +68,15 @@ List the authenticated user's connected social media accounts.
 ### curl Example
 
 ```bash
-curl -s "$VERSELY_API_URL/api/v1/postbridge/accounts" \
+curl -s "$VERSELY_API_URL/api/v1/social/accounts" \
   -H "Authorization: Bearer $VERSELY_API_KEY"
 ```
 
 ---
 
-## POST /api/v1/postbridge/accounts/sync
+## POST /api/v1/social/accounts/refresh
 
-Sync accounts from PostBridge after a user connects new social accounts.
+Refresh accounts from Post for Me after a user connects new social accounts.
 
 **Rate limit:** 5 requests/minute per user
 
@@ -78,20 +86,23 @@ Sync accounts from PostBridge after a user connects new social accounts.
 {
   "success": true,
   "new_accounts": 2,
+  "reactivated_accounts": 1,
   "total": 5
 }
 ```
 
+`reactivated_accounts` counts previously-disconnected mappings that were re-activated when the same external account reconnected.
+
 ### curl Example
 
 ```bash
-curl -X POST "$VERSELY_API_URL/api/v1/postbridge/accounts/sync" \
+curl -X POST "$VERSELY_API_URL/api/v1/social/accounts/refresh" \
   -H "Authorization: Bearer $VERSELY_API_KEY"
 ```
 
 ---
 
-## DELETE /api/v1/postbridge/accounts/:accountId
+## DELETE /api/v1/social/accounts/:accountId
 
 Disconnect (soft-delete) a social account.
 
@@ -112,13 +123,13 @@ Disconnect (soft-delete) a social account.
 ### curl Example
 
 ```bash
-curl -X DELETE "$VERSELY_API_URL/api/v1/postbridge/accounts/uuid-1234" \
+curl -X DELETE "$VERSELY_API_URL/api/v1/social/accounts/uuid-1234" \
   -H "Authorization: Bearer $VERSELY_API_KEY"
 ```
 
 ---
 
-## POST /api/v1/postbridge/posts
+## POST /api/v1/social/posts
 
 Create a social media post (immediate or scheduled).
 
@@ -134,6 +145,7 @@ Create a social media post (immediate or scheduled).
 | `media_urls` | string[] | No | Media URLs (images or videos) |
 | `scheduled_at` | string | No | ISO 8601 datetime for scheduling |
 | `is_draft` | boolean | No | Save as draft. Default: `false` |
+| `tiktok_draft` | boolean | No | Save TikTok-specific in-app drafts (independent of `is_draft`). Default: `false` |
 
 ### Response — Immediate Post
 
@@ -141,15 +153,19 @@ Create a social media post (immediate or scheduled).
 {
   "success": true,
   "post": {
-    "id": "postbridge-post-id",
+    "id": "uuid-post-1",
     "caption": "Check out this sunset!",
-    "status": "posted",
+    "status": "processing",
     "platforms": ["instagram", "tiktok"],
-    "scheduled_at": null
+    "scheduled_at": null,
+    "is_draft": false,
+    "tiktok_draft": false
   },
   "credits_charged": 4
 }
 ```
+
+Immediate posts initially return `status: "processing"`. They transition to `"posted"` (or `"failed"`) after the Post for Me webhook fires. Poll `GET /api/v1/social/posts/:postId` to track the final state.
 
 ### Response — Scheduled Post
 
@@ -157,11 +173,13 @@ Create a social media post (immediate or scheduled).
 {
   "success": true,
   "post": {
-    "id": "postbridge-post-id",
+    "id": "uuid-post-1",
     "caption": "Morning motivation!",
     "status": "scheduled",
     "platforms": ["instagram"],
-    "scheduled_at": "2026-03-01T09:00:00Z"
+    "scheduled_at": "2026-03-01T09:00:00Z",
+    "is_draft": false,
+    "tiktok_draft": false
   },
   "credits_charged": 2
 }
@@ -174,15 +192,15 @@ Create a social media post (immediate or scheduled).
 {"success": false, "error": "At least one account_id is required"}
 {"success": false, "error": "No valid accounts found for this user"}
 {"success": false, "error": "Failed to deduct credits"}
-{"success": false, "error": "PostBridge error: ..."}
+{"success": false, "error": "Post for Me error: ..."}
 ```
 
-**Credit refund:** If PostBridge API fails after credits are deducted, credits are automatically refunded.
+**Credit refund:** If Post for Me API fails after credits are deducted, credits are automatically refunded.
 
 ### curl Example — Immediate Post
 
 ```bash
-curl -X POST "$VERSELY_API_URL/api/v1/postbridge/posts" \
+curl -X POST "$VERSELY_API_URL/api/v1/social/posts" \
   -H "Authorization: Bearer $VERSELY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -195,7 +213,7 @@ curl -X POST "$VERSELY_API_URL/api/v1/postbridge/posts" \
 ### curl Example — Scheduled Post
 
 ```bash
-curl -X POST "$VERSELY_API_URL/api/v1/postbridge/posts" \
+curl -X POST "$VERSELY_API_URL/api/v1/social/posts" \
   -H "Authorization: Bearer $VERSELY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -209,7 +227,7 @@ curl -X POST "$VERSELY_API_URL/api/v1/postbridge/posts" \
 ### curl Example — Instagram Carousel
 
 ```bash
-curl -X POST "$VERSELY_API_URL/api/v1/postbridge/posts" \
+curl -X POST "$VERSELY_API_URL/api/v1/social/posts" \
   -H "Authorization: Bearer $VERSELY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -226,7 +244,7 @@ curl -X POST "$VERSELY_API_URL/api/v1/postbridge/posts" \
 
 ---
 
-## GET /api/v1/postbridge/posts
+## GET /api/v1/social/posts
 
 List the authenticated user's social posts.
 
@@ -245,7 +263,7 @@ List the authenticated user's social posts.
   "posts": [
     {
       "id": "uuid-post-1",
-      "postbridge_post_id": "pb-123",
+      "external_post_id": "pb-123",
       "text": "Check out this sunset!",
       "media_urls": ["https://..."],
       "platforms": ["instagram", "tiktok"],
@@ -261,13 +279,13 @@ List the authenticated user's social posts.
 ### curl Example
 
 ```bash
-curl -s "$VERSELY_API_URL/api/v1/postbridge/posts?limit=10" \
+curl -s "$VERSELY_API_URL/api/v1/social/posts?limit=10" \
   -H "Authorization: Bearer $VERSELY_API_KEY"
 ```
 
 ---
 
-## GET /api/v1/postbridge/posts/:postId
+## GET /api/v1/social/posts/:postId
 
 Get a single post with platform-specific results.
 
@@ -278,7 +296,7 @@ Get a single post with platform-specific results.
   "success": true,
   "post": {
     "id": "uuid-post-1",
-    "postbridge_post_id": "pb-123",
+    "external_post_id": "pb-123",
     "text": "Check out this sunset!",
     "media_urls": ["https://..."],
     "platforms": ["instagram"],
@@ -306,15 +324,15 @@ Get a single post with platform-specific results.
 ### curl Example
 
 ```bash
-curl -s "$VERSELY_API_URL/api/v1/postbridge/posts/uuid-post-1" \
+curl -s "$VERSELY_API_URL/api/v1/social/posts/uuid-post-1" \
   -H "Authorization: Bearer $VERSELY_API_KEY"
 ```
 
 ---
 
-## DELETE /api/v1/postbridge/posts/:postId
+## DELETE /api/v1/social/posts/:postId
 
-Delete a post from PostBridge and the database.
+Delete a post from Post for Me and the database.
 
 ### Response
 
@@ -327,7 +345,7 @@ Delete a post from PostBridge and the database.
 ### curl Example
 
 ```bash
-curl -X DELETE "$VERSELY_API_URL/api/v1/postbridge/posts/uuid-post-1" \
+curl -X DELETE "$VERSELY_API_URL/api/v1/social/posts/uuid-post-1" \
   -H "Authorization: Bearer $VERSELY_API_KEY"
 ```
 
@@ -352,10 +370,11 @@ Response headers:
 
 | Status | Meaning |
 |--------|---------|
-| 400 | Bad request — missing caption or account_ids |
+| 400 | Bad request — missing caption or `account_ids` |
 | 401 | Unauthorized — invalid/expired API key |
-| 402 | Insufficient credits — cost = 2 x platforms |
-| 403 | API key lacks `post` scope |
-| 404 | Post or account not found |
+| 402 | Insufficient credits at deduction time — cost = 2 × number of platforms (flat) |
+| 403 | API key lacks the required scope (`post`, or `manage_accounts` for `/accounts/*`); insufficient credits at request entry; or "No valid accounts found for this user" (the `account_ids` don't belong to this user or are disconnected) |
+| 404 | Post not found (only for `GET /posts/:postId` and `DELETE /posts/:postId`) |
 | 429 | Rate limited — check `X-RateLimit-Reset` |
+| 502 | "Post for Me error: …" — upstream/platform failure. Credits are auto-refunded. |
 | 500 | Server error — retry once |

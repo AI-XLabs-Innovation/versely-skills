@@ -2,133 +2,290 @@
 
 Base URL: `$VERSELY_API_URL` (default: `https://api.versely.studio`)
 
-All endpoints require `Authorization: Bearer $VERSELY_API_KEY`.
+All endpoints require `Authorization: Bearer $VERSELY_API_KEY`. The `enforceUserId` middleware injects `user_id` from the API key — do not pass it.
+
+**Required scope:** `generate` (covers `/movie/*` and `/generate/*`).
 
 ---
 
-## POST /api/v1/generate/story
+# Part 1 — `/movie/*` (recommended)
 
-Generate a multi-scene storyboard video.
+The dedicated movie API. Stateful project + scenes + per-scene polling + auto-combine.
 
-### Request Body
+## GET /api/v1/movie/models
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `model` | string | Yes | `"Sora 2 Pro Storyboard"` \| `"Kling 2.5 Turbo"` \| `"VEO 3.1 First Last Frame"` |
-| `scenes` | array | Yes (Sora) | `[{ description: "...", duration: "5" }]` — min 2 scenes |
-| `image_urls` | string[] | No | Reference images for visual consistency |
-| `aspect_ratio` | string | No | `"16:9"` (default) \| `"9:16"` |
-| `total_duration` | string | No | `"10"` \| `"15"` \| `"25"` |
-| `audio_url` | string | No | Background audio URL |
-| `prompt` | string | No | Overall prompt (VEO models) |
-| `first_frame_url` | string | No | First frame image (VEO First Last Frame) |
-| `last_frame_url` | string | No | Last frame image (VEO First Last Frame) |
-| `duration` | string | No | Duration for Kling models |
-
-### Response
-
-Same as `POST /api/v1/generate/video` — returns `requestId` for polling.
+Returns models grouped by generation type.
 
 ```json
 {
   "success": true,
   "data": {
-    "successful": [
+    "text_to_video":    ["Sora 2", "VEO 3.1", "Kling 2.5 Turbo", ...],
+    "image_to_video":   ["Sora 2 I2V", "Kling 2.5 Turbo I2V", ...],
+    "first_last_frame": ["VEO First Last Frame", "Kling First Last Frame", ...]
+  }
+}
+```
+
+## POST /api/v1/movie/create
+
+Create a movie project + scenes.
+
+### Request
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `title` | string | No | `"Untitled Movie"` | |
+| `description` | string | No | | |
+| `aspect_ratio` | string | No | `"16:9"` | |
+| `transition_type` | enum | No | `concat` | `concat` \| `fade` \| `dissolve` \| `wipe` |
+| `transition_duration` | number | No | `0.5` | Seconds between scenes when combined |
+| `scenes` | object[] | **Yes** | | Array of scene definitions, min 1 |
+
+### Scene fields
+
+| Field | Type | Required for | Description |
+|-------|------|--------------|-------------|
+| `generation_type` | enum | All | `text_to_video` \| `image_to_video` \| `first_last_frame` \| `previous_scene_image_to_video` \| `previous_scene_first_last_frame` |
+| `model` | string | All | Must match the generation_type (use `/movie/models`) |
+| `prompt` | string | text_to_video, image_to_video, all `previous_scene_*` | |
+| `image_url` | string | image_to_video | Reference image |
+| `first_frame_url` | string | first_last_frame | |
+| `last_frame_url` | string | first_last_frame, previous_scene_first_last_frame | |
+| `duration` | number | No | Seconds, default `5` |
+
+`previous_scene_*` types cannot be used at scene_order 1.
+
+### Response (`201`)
+
+```json
+{
+  "success": true,
+  "message": "Movie project created",
+  "data": {
+    "movie": { "id": "mov_...", "user_id": "...", "title": "...", "status": "draft", ... },
+    "scenes": [{ "id": "scn_...", "scene_order": 1, "status": "pending", ... }, ...],
+    "estimated_credits": 90
+  }
+}
+```
+
+## GET /api/v1/movie/list?page=1&limit=20
+
+```json
+{
+  "success": true,
+  "data": [{...movie}, ...],
+  "pagination": { "page": 1, "limit": 20, "total": 5, "totalPages": 1 }
+}
+```
+
+## GET /api/v1/movie/:movieId
+
+```json
+{
+  "success": true,
+  "data": {
+    "movie": {...},
+    "scenes": [{...}, ...]
+  }
+}
+```
+
+## PUT /api/v1/movie/:movieId
+
+Update metadata. Body: any of `title`, `description`, `aspect_ratio`, `transition_type`, `transition_duration`, `metadata`.
+
+## DELETE /api/v1/movie/:movieId
+
+Deletes movie + all scenes.
+
+## GET /api/v1/movie/:movieId/status
+
+**Canonical poll endpoint for movies.**
+
+```json
+{
+  "success": true,
+  "data": {
+    "movie_id": "mov_...",
+    "status": "draft | generating | combining | completed | failed",
+    "title": "...",
+    "final_video_url": "https://..." | null,
+    "scenes_total": 3,
+    "scenes_pending": 0,
+    "scenes_generating": 1,
+    "scenes_completed": 2,
+    "scenes_failed": 0,
+    "scenes": [
       {
-        "data": {
-          "requestId": "abc123",
-          "model": "Sora 2 Pro Storyboard",
-          "isVideoModel": true
-        }
-      }
+        "id": "scn_...",
+        "order": 1,
+        "status": "pending | generating | completed | failed",
+        "generation_type": "...",
+        "model": "...",
+        "video_url": "https://..." | null,
+        "error": "..." | null,
+        "duration": 5
+      },
+      ...
     ]
   }
 }
 ```
 
-### curl Example — Sora Storyboard
+## POST /api/v1/movie/:movieId/scene
 
-```bash
-curl -X POST "$VERSELY_API_URL/api/v1/generate/story" \
-  -H "Authorization: Bearer $VERSELY_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "Sora 2 Pro Storyboard",
-    "scenes": [
-      {"description": "A drone shot over a mountain lake at sunrise", "duration": "5"},
-      {"description": "Camera descends to water level, reflections shimmer", "duration": "5"}
-    ],
-    "aspect_ratio": "16:9"
-  }'
+Add a scene to an existing movie. Body: same shape as a scene in `/movie/create`.
+
+Response: `{ "success": true, "data": {...scene} }` (status `201`).
+
+## PUT /api/v1/movie/scene/:sceneId
+
+Update a single scene. Body: any of `prompt`, `model`, `generation_type`, `image_url`, `first_frame_url`, `last_frame_url`, `duration`.
+
+## DELETE /api/v1/movie/scene/:sceneId
+
+## PUT /api/v1/movie/:movieId/reorder
+
+```json
+{ "scene_ids": ["scn_2", "scn_1", "scn_3"] }
 ```
 
-### curl Example — VEO First Last Frame
+## POST /api/v1/movie/:movieId/generate
 
-```bash
-curl -X POST "$VERSELY_API_URL/api/v1/generate/story" \
-  -H "Authorization: Bearer $VERSELY_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "VEO 3.1 First Last Frame",
-    "prompt": "Smooth cinematic transition from day to night",
-    "first_frame_url": "https://example.com/day.jpg",
-    "last_frame_url": "https://example.com/night.jpg"
-  }'
-```
-
----
-
-## POST /api/v1/generate/expand-scene
-
-Expand a brief description into a detailed cinematic scene prompt.
-
-### Request Body
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `description` | string | Yes | Brief scene idea |
-| `context` | string | No | Story genre/context |
-| `style` | string | No | Visual style |
-| `camera` | string | No | `static` \| `pan_left` \| `pan_right` \| `zoom_in` \| `zoom_out` \| `tilt_up` \| `tilt_down` \| `dolly_in` \| `orbit` \| `tracking` |
-| `characters` | string | No | Characters in the scene |
+Start generation. Independent scenes dispatch in parallel; dependents queue.
 
 ### Response
 
 ```json
 {
   "success": true,
-  "expanded": "A wide establishing shot of..."
+  "message": "Movie generation started",
+  "data": {
+    "movie_id": "mov_...",
+    "credits_deducted": 60,
+    "credits_refunded": 0,
+    "scenes_dispatched": 1,
+    "scenes_failed": 0,
+    "scenes_queued": 2,
+    "details": [
+      { "sceneId": "scn_1", "requestId": "req_...", "credits": 30 },
+      { "sceneId": "scn_2", "requestId": "queued_awaiting_scene_scn_1", "credits": 30 }
+    ]
+  }
 }
 ```
 
-### curl Example
+### Errors
 
-```bash
-curl -X POST "$VERSELY_API_URL/api/v1/generate/expand-scene" \
-  -H "Authorization: Bearer $VERSELY_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "description": "Car chase through a city",
-    "context": "Action thriller",
-    "style": "cinematic",
-    "camera": "tracking"
-  }'
+| Status | Body |
+|--------|------|
+| 404 | Movie not found |
+| 403 | Movie owned by another user |
+| 409 | Movie already generating or combining |
+| 400 | No pending/failed scenes to generate |
+| 500 | All dispatches failed (credits refunded) |
+
+## POST /api/v1/movie/:movieId/generate-scene/:sceneId
+
+Retry a single scene.
+
+```json
+{
+  "success": true,
+  "message": "Scene generation started",
+  "data": { "scene_id": "scn_...", "request_id": "req_...", "credits_deducted": 30 }
+}
 ```
+
+For dependent scenes, the previous scene must already be `completed`.
+
+## POST /api/v1/movie/:movieId/combine
+
+Manually combine completed scenes. Auto-combine usually fires automatically when the last scene's webhook arrives.
+
+Returns the full movie object once combine succeeds.
+
+### Errors
+
+| Status | Reason |
+|--------|--------|
+| 400 | Not all scenes completed (returns `incomplete_scenes[]`) |
+| 400 | No scene videos available |
+
+## POST /api/v1/movie/webhook/scene
+
+Provider callback (do not call directly).
 
 ---
 
-## GET /api/v1/status/:requestId
+# Part 2 — `/generate/story` (one-shot alternative)
 
-Poll generation status (same as versely-generate skill).
+Use when you don't need scene-level retries or chained frames.
+
+## POST /api/v1/generate/story
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `model` | string | Yes | `"Sora 2 Pro Storyboard"` \| `"Kling 2.5 Turbo"` \| `"VEO 3.1 First Last Frame"` |
+| `scenes` | array | Yes (Sora) | `[{ description: "...", duration: "5" }]` — min 2 |
+| `image_urls` | string[] | No | Reference images |
+| `aspect_ratio` | string | No | `"16:9"` (default) \| `"9:16"` |
+| `total_duration` | string | No | `"10"` \| `"15"` \| `"25"` |
+| `audio_url` | string | No | Background audio |
+| `prompt` | string | VEO models | Overall prompt |
+| `first_frame_url` | string | VEO First Last Frame | |
+| `last_frame_url` | string | VEO First Last Frame | |
+| `duration` | string | Kling models | |
 
 ### Response
+
+Same shape as `POST /generate/video`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "successful": [{ "data": { "requestId": "abc123", "model": "...", "isVideoModel": true } }]
+  }
+}
+```
+
+Poll via `GET /api/v1/status/:requestId`.
+
+## POST /api/v1/generate/expand-scene
+
+Expand a brief idea into a cinematic prompt.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `description` | string | Yes | Brief idea |
+| `context` | string | No | Genre/context |
+| `style` | string | No | Visual style |
+| `camera` | string | No | `static` \| `pan_left` \| `pan_right` \| `zoom_in` \| `zoom_out` \| `tilt_up` \| `tilt_down` \| `dolly_in` \| `orbit` \| `tracking` |
+| `characters` | string | No | |
+
+```json
+{ "success": true, "expanded": "A wide establishing shot of..." }
+```
+
+## GET /api/v1/generate/story-models
+
+```json
+{ "success": true, "models": ["Sora 2 Pro Storyboard", "Kling 2.5 Turbo", "VEO 3.1 First Last Frame"] }
+```
+
+## GET /api/v1/status/:requestId
+
+Generic poll endpoint (use only with `/generate/story`; for `/movie/*` use `/movie/:id/status`).
 
 ```json
 {
   "success": true,
   "status": "generating | completed | failed",
   "type": "videos",
-  "model": "Sora 2 Pro Storyboard",
+  "model": "...",
   "result_url": "https://...",
   "result_urls": ["https://..."]
 }
@@ -136,76 +293,35 @@ Poll generation status (same as versely-generate skill).
 
 ---
 
-## Merge Scenes (Agentic Tool)
-
-Available through the agentic chat system as `merge_movie_scenes`. Uses the Segmind Multi Video Merge API.
-
-### Parameters
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `video_urls` | string[] | Yes | Video URLs to merge in order |
-| `transition_type` | string | No | `"concat"` \| `"fade"` (default) \| `"dissolve"` \| `"wipe"` |
-| `transition_duration` | number | No | Seconds between scenes (default: 0.5) |
-| `audio_handling` | string | No | `"merge"` (default) \| `"first"` \| `"none"` |
-
-### Underlying API (Segmind)
-
-```json
-{
-  "video_urls": ["url1", "url2"],
-  "width": 1920,
-  "height": 1080,
-  "fps": 30,
-  "transition_type": "fade",
-  "transition_duration": 0.5,
-  "maintain_aspect_ratio": true,
-  "audio_handling": "merge"
-}
-```
-
----
-
-## GET /api/v1/generate/story-models
-
-List available story/storyboard models.
-
-### Response
-
-```json
-{
-  "success": true,
-  "models": ["Sora 2 Pro Storyboard", "Kling 2.5 Turbo", "VEO 3.1 First Last Frame"]
-}
-```
-
----
-
 ## Credit Costs
 
-| Model | Billing | ~Credits (API) |
-|-------|---------|----------------|
-| Sora 2 Pro Storyboard | $0.30/second | 3/second |
-| Kling 2.5 Turbo | $0.21 base + $0.042/s | ~3 for 5s |
-| VEO 3.1 First Last Frame | $0.10-$0.15 flat | 1-2 |
+| Operation | Billing | ~Credits (API) |
+|-----------|---------|----------------|
+| Sora 2 (text-to-video, 5s) | $0.50 | ~25 |
+| Sora 2 Pro Storyboard | $0.30/second | 15/5s |
+| VEO 3.1 (5s) | ~$0.05 | ~2 |
+| Kling 2.5 Turbo (5s) | ~$0.10 | ~5 |
+| VEO First Last Frame | flat $0.10-$0.15 | 1-2 |
 
----
+API keys bill at half the in-app rate (CREDITS_PER_USD_API=10 vs APP=20).
 
 ## Rate Limits
 
 | Scope | Limit |
 |-------|-------|
-| Default | 60 req/min |
-| Generation | 20 req/min |
-| Concurrent video | 2 recommended |
+| Default (`/movie/*`) | 60 req/min per API key |
+| `/generate/story`, `/generate/expand-scene` | 30 req/min, IP-based |
+| Concurrent video generation | 2 recommended |
 
 ## Error Codes
 
 | Status | Meaning |
 |--------|---------|
-| 400 | Missing scenes or invalid model |
-| 401 | Invalid API key |
-| 402 | Insufficient credits |
-| 403 | Missing `generate` scope |
+| 400 | Validation error (missing scenes, invalid generation_type, etc.) |
+| 401 | Invalid / expired API key |
+| 402 | Per-call credit deduction failed |
+| 403 | Missing `generate` scope, balance ≤ 0, or unauthorized movie |
+| 404 | Movie or scene not found |
+| 409 | Movie already `generating` or `combining` |
 | 429 | Rate limited |
-| 500 | Server error |
+| 500 | Provider failure or unexpected error |

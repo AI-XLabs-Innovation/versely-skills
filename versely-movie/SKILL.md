@@ -1,240 +1,379 @@
 ---
 name: versely-movie
-version: 1.0.0
+version: 2.0.0
 description: >
-  Create multi-scene AI movies and storyboards. Expand brief scene ideas into
-  cinematic descriptions, generate video for each scene, and merge into a final movie.
-  Use when the user wants to create a short film, storyboard, or multi-scene video.
+  Create multi-scene AI movies with the dedicated /movie/* project API. Manage
+  scenes, chain them via previous-frame I2V, generate, poll per-scene status,
+  and combine into a final video. Use when the user wants a multi-scene short
+  film, storyboard, or chained-frame video with non-blind polling.
 allowed-tools: Bash, Read
 metadata:
   agentskills.io:
     category: content-creation
     homepage: https://versely.studio
-    tags: ["movie", "storyboard", "video", "scenes"]
+    tags: ["movie", "storyboard", "video", "scenes", "chained"]
 ---
 
-# Versely Movie — Multi-Scene AI Movie Creation
+# Versely Movie — Multi-Scene AI Movies
 
-Create multi-scene AI movies: expand scene ideas into cinematic descriptions, generate video per scene, and merge into a final movie.
+The `/movie/*` namespace is the **first-class movie API**: project + scene CRUD, chained frames between scenes, per-scene status polling, automatic combine. Use this instead of the lower-level `/generate/story` whenever you need to track progress, retry individual scenes, or chain frames between scenes.
 
-**Typical workflow:** Design Scenes → Expand Descriptions → Generate Story Video → Poll → Merge Scenes
+**Typical workflow:** Plan scenes → Create movie → Generate → Poll `/movie/:id/status` → Combine
 
 ## Authentication
 
 ```bash
 VERSELY_API_KEY="vsk_..."
-VERSELY_API_URL="https://api.versely.studio"
+VERSELY_API_URL="${VERSELY_API_URL:-https://api.versely.studio}"
 ```
 
-Do NOT send `user_id` — the API key resolves the user server-side.
+Send `Authorization: Bearer $VERSELY_API_KEY`. Do NOT send `user_id` — middleware injects it.
 
-## Step 1: Design Scenes
+## Required API Key Scope
 
-Plan 2+ scenes with descriptions and durations before generating.
+**Scope:** `generate`. Covers `/movie/*` (project + scene CRUD, generate, combine, status, models) and underlying `/generate/*` endpoints used in fallback flows.
 
-```
-Scene 1: "A lone traveler walks through a misty forest at dawn" (5s)
-Scene 2: "They discover an ancient stone bridge over a river" (5s)
-Scene 3: "Crossing the bridge, they see a castle in the distance" (5s)
-```
+Create a key with `{"scopes": ["generate"]}` via `POST /api/v1/auth/api-keys`. Live scope catalog: `GET /api/v1/auth/api-keys/scopes`.
 
-## Step 2: Expand Scene Descriptions (Optional)
+## Two Movie APIs — Pick One
 
-**Endpoint:** `POST /api/v1/generate/expand-scene`
+| API | Use when |
+|---|---|
+| **`/movie/*`** (this skill) | Want per-scene visibility, retries, chained frames, transitions |
+| `/generate/story` | One-shot Sora 2 Pro Storyboard call, no project state needed |
 
-Expand brief ideas into detailed cinematic prompts optimized for AI video generation.
+The rest of this skill documents `/movie/*`. For `/generate/story`, see [api-reference.md](api-reference.md).
+
+## Step 1: Discover Models
 
 ```bash
-curl -X POST "$VERSELY_API_URL/api/v1/generate/expand-scene" \
+curl -s "$VERSELY_API_URL/api/v1/movie/models" \
+  -H "Authorization: Bearer $VERSELY_API_KEY" | jq
+```
+
+**Response shape:**
+```json
+{
+  "success": true,
+  "data": {
+    "text_to_video":     ["Sora 2", "VEO 3.1", "Kling 2.5 Turbo", ...],
+    "image_to_video":    ["Sora 2 I2V", "Kling 2.5 Turbo I2V", "Wan 2.5 I2V", ...],
+    "first_last_frame":  ["VEO First Last Frame", "Kling First Last Frame", ...]
+  }
+}
+```
+
+Pick a model that matches each scene's `generation_type` (see Step 2).
+
+## Step 2: Create Movie Project
+
+**Endpoint:** `POST /api/v1/movie/create`
+
+Creates a movie + its scenes in one call. Each scene specifies how its video is generated.
+
+### Generation types
+
+| `generation_type` | Required fields | Use case |
+|---|---|---|
+| `text_to_video` | `prompt`, `model` | Generate from prompt only |
+| `image_to_video` | `prompt`, `image_url`, `model` | Generate from a reference image |
+| `first_last_frame` | `prompt`, `first_frame_url`, `last_frame_url`, `model` | Transition between two given frames |
+| `previous_scene_image_to_video` | `prompt`, `model` | Use the **previous scene's last frame** as the input image (chained scenes) |
+| `previous_scene_first_last_frame` | `prompt`, `last_frame_url`, `model` | Previous scene's last frame becomes this scene's first frame; you supply the new last frame |
+
+Scene 1 cannot use a `previous_scene_*` type (no previous scene to chain from).
+
+### Example — 3-scene chained movie
+
+```bash
+curl -s -X POST "$VERSELY_API_URL/api/v1/movie/create" \
   -H "Authorization: Bearer $VERSELY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "description": "A lone traveler walks through a misty forest",
-    "context": "Fantasy adventure opening",
-    "style": "cinematic",
-    "camera": "tracking"
+    "title": "Forest Journey",
+    "description": "A traveler crosses an enchanted forest",
+    "aspect_ratio": "16:9",
+    "transition_type": "fade",
+    "transition_duration": 0.5,
+    "scenes": [
+      {
+        "generation_type": "image_to_video",
+        "model": "Kling 2.5 Turbo",
+        "prompt": "A cloaked traveler steps onto a misty forest path at dawn",
+        "image_url": "https://example.com/character.jpg",
+        "duration": 5
+      },
+      {
+        "generation_type": "previous_scene_image_to_video",
+        "model": "Kling 2.5 Turbo",
+        "prompt": "The traveler discovers an ancient stone bridge over a river",
+        "duration": 5
+      },
+      {
+        "generation_type": "previous_scene_first_last_frame",
+        "model": "VEO First Last Frame",
+        "prompt": "Crossing the bridge, a castle rises in the distance",
+        "last_frame_url": "https://example.com/castle.jpg",
+        "duration": 5
+      }
+    ]
   }'
 ```
+
+**Response (`201`):**
+```json
+{
+  "success": true,
+  "message": "Movie project created",
+  "data": {
+    "movie": { "id": "mov_abc", "title": "...", "status": "draft", "user_id": "...", "aspect_ratio": "16:9", ... },
+    "scenes": [{ "id": "scn_1", "scene_order": 1, "status": "pending", ... }, ...],
+    "estimated_credits": 90
+  }
+}
+```
+
+Save `data.movie.id` — you'll need it for every subsequent call.
+
+**Top-level fields:** `title` (default `"Untitled Movie"`), `description`, `aspect_ratio` (default `"16:9"`), `transition_type` (`concat` | `fade` | `dissolve` | `wipe`, default `concat`), `transition_duration` (seconds, default `0.5`), `scenes` (array, required).
+
+## Step 3: Generate All Pending Scenes
+
+**Endpoint:** `POST /api/v1/movie/:movieId/generate`
+
+Kicks off generation for all `pending` and `failed` scenes. Independent scenes start in parallel; dependent (`previous_scene_*`) scenes are queued and auto-triggered when their prerequisite completes.
+
+```bash
+MOVIE_ID="mov_abc"
+
+curl -s -X POST "$VERSELY_API_URL/api/v1/movie/$MOVIE_ID/generate" \
+  -H "Authorization: Bearer $VERSELY_API_KEY"
+```
+
+**Response (`200`):**
+```json
+{
+  "success": true,
+  "message": "Movie generation started",
+  "data": {
+    "movie_id": "mov_abc",
+    "credits_deducted": 60,
+    "credits_refunded": 0,
+    "scenes_dispatched": 1,
+    "scenes_failed": 0,
+    "scenes_queued": 2,
+    "details": [
+      { "sceneId": "scn_1", "requestId": "req_123", "credits": 30 },
+      { "sceneId": "scn_2", "requestId": "queued_awaiting_scene_scn_1", "credits": 30 },
+      { "sceneId": "scn_3", "requestId": "queued_awaiting_scene_scn_2", "credits": 30 }
+    ]
+  }
+}
+```
+
+**Errors:**
+- `409` — movie already `generating` or `combining`. Don't retry; poll status instead.
+- `400` — no pending scenes (movie already complete or all already generating).
+- `500` with `details: []` — every scene failed at dispatch; credits are refunded.
+
+## Step 4: Poll Per-Scene Status
+
+**Endpoint:** `GET /api/v1/movie/:movieId/status` — **the canonical poll endpoint for movies. Do NOT poll `/status/:requestId` per scene.**
+
+```bash
+for i in $(seq 1 90); do
+  STATUS=$(curl -s "$VERSELY_API_URL/api/v1/movie/$MOVIE_ID/status" \
+    -H "Authorization: Bearer $VERSELY_API_KEY")
+  STATE=$(echo "$STATUS" | jq -r '.data.status')
+  COMPLETED=$(echo "$STATUS" | jq -r '.data.scenes_completed')
+  TOTAL=$(echo "$STATUS" | jq -r '.data.scenes_total')
+  echo "[$i] movie=$STATE scenes=$COMPLETED/$TOTAL"
+  if [ "$STATE" = "completed" ] || [ "$STATE" = "failed" ]; then break; fi
+  sleep 10
+done
+```
+
+**Response shape:**
+```json
+{
+  "success": true,
+  "data": {
+    "movie_id": "mov_abc",
+    "status": "generating",
+    "title": "Forest Journey",
+    "final_video_url": null,
+    "scenes_total": 3,
+    "scenes_pending": 0,
+    "scenes_generating": 1,
+    "scenes_completed": 1,
+    "scenes_failed": 0,
+    "scenes": [
+      { "id": "scn_1", "order": 1, "status": "completed", "video_url": "https://...", "model": "...", "duration": 5, "error": null },
+      { "id": "scn_2", "order": 2, "status": "generating", "video_url": null, ... },
+      { "id": "scn_3", "order": 3, "status": "pending", "video_url": null, ... }
+    ]
+  }
+}
+```
+
+**Movie statuses:** `draft` → `generating` → `combining` → `completed` (or `failed` at any point).
+
+**Auto-combine:** when the last scene finishes successfully, the backend automatically calls combine — `status` will move through `combining` → `completed` and `final_video_url` will populate. You don't always need to call `/combine` yourself; only call it manually if you skipped a scene's webhook or auto-combine failed.
+
+## Step 5: Combine (only if needed)
+
+**Endpoint:** `POST /api/v1/movie/:movieId/combine`
+
+```bash
+curl -s -X POST "$VERSELY_API_URL/api/v1/movie/$MOVIE_ID/combine" \
+  -H "Authorization: Bearer $VERSELY_API_KEY"
+```
+
+Merges all completed scene videos using the configured `transition_type` and `transition_duration`. Returns the final movie object with `final_video_url`. Returns `400` if any scene is still incomplete.
+
+## Retry a Failed Scene
+
+**Endpoint:** `POST /api/v1/movie/:movieId/generate-scene/:sceneId`
+
+```bash
+curl -s -X POST "$VERSELY_API_URL/api/v1/movie/$MOVIE_ID/generate-scene/scn_2" \
+  -H "Authorization: Bearer $VERSELY_API_KEY"
+```
+
+Use this to retry a `failed` scene without re-running the entire movie. Charges credits for that single scene only. For dependent scenes, the previous scene must already be `completed`.
 
 **Response:**
 ```json
 {
   "success": true,
-  "expanded": "A wide tracking shot follows a lone traveler in a dark cloak through a misty ancient forest at dawn. Volumetric fog drifts between towering moss-covered trees. Dappled golden light breaks through the canopy, casting long shadows. The camera glides smoothly at waist height, maintaining a medium distance..."
+  "message": "Scene generation started",
+  "data": { "scene_id": "scn_2", "request_id": "req_456", "credits_deducted": 30 }
 }
 ```
 
-**Fields:**
-- `description` (required): Brief scene idea
-- `context` (optional): Story genre/context
-- `style` (optional): Visual style
-- `camera` (optional): `static` | `pan_left` | `pan_right` | `zoom_in` | `zoom_out` | `tilt_up` | `tilt_down` | `dolly_in` | `orbit` | `tracking`
-- `characters` (optional): Characters in the scene
+## Scene Editing Before Generation
 
-**Tip:** Expand all scenes before generating — better prompts produce dramatically better videos.
-
-## Step 3: Generate Story Video
-
-**Endpoint:** `POST /api/v1/generate/story`
-
-Generate a multi-scene storyboard video.
+You can mutate the scene list while the movie is in `draft` status:
 
 ```bash
-RESPONSE=$(curl -s -X POST "$VERSELY_API_URL/api/v1/generate/story" \
+# Add a scene to an existing movie
+curl -X POST "$VERSELY_API_URL/api/v1/movie/$MOVIE_ID/scene" \
   -H "Authorization: Bearer $VERSELY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "Sora 2 Pro Storyboard",
-    "scenes": [
-      {
-        "description": "A wide tracking shot follows a lone traveler through misty ancient forest...",
-        "duration": "5"
-      },
-      {
-        "description": "The traveler discovers an ancient stone bridge spanning a crystal-clear river...",
-        "duration": "5"
-      }
-    ],
-    "image_urls": ["https://example.com/reference-character.jpg"],
-    "aspect_ratio": "16:9"
-  }')
-
-REQUEST_ID=$(echo $RESPONSE | jq -r '.data.successful[0].data.requestId')
-echo "Request ID: $REQUEST_ID"
-```
-
-**Key fields:**
-- `model` (required): `"Sora 2 Pro Storyboard"` | `"Kling 2.5 Turbo"` | `"VEO 3.1 First Last Frame"`
-- `scenes` (required for Sora): Array of `{ description, duration }` — minimum 2 scenes
-- `image_urls` (optional): Reference images for visual consistency
-- `aspect_ratio` (optional): `"16:9"` (default) | `"9:16"`
-- `audio_url` (optional): Background audio URL
-
-**For VEO First/Last Frame model:**
-```bash
-curl -X POST "$VERSELY_API_URL/api/v1/generate/story" \
-  -H "Authorization: Bearer $VERSELY_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "VEO 3.1 First Last Frame",
-    "prompt": "Smooth cinematic transition between two locations",
-    "first_frame_url": "https://example.com/frame1.jpg",
-    "last_frame_url": "https://example.com/frame2.jpg",
-    "aspect_ratio": "16:9"
+    "generation_type": "text_to_video",
+    "model": "VEO 3.1",
+    "prompt": "Final shot: zooming out from the castle",
+    "duration": 5
   }'
+
+# Update a scene
+curl -X PUT "$VERSELY_API_URL/api/v1/movie/scene/scn_2" \
+  -H "Authorization: Bearer $VERSELY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "prompt": "Updated description", "duration": 7 }'
+
+# Delete a scene
+curl -X DELETE "$VERSELY_API_URL/api/v1/movie/scene/scn_2" \
+  -H "Authorization: Bearer $VERSELY_API_KEY"
+
+# Reorder scenes (full ordered list of IDs)
+curl -X PUT "$VERSELY_API_URL/api/v1/movie/$MOVIE_ID/reorder" \
+  -H "Authorization: Bearer $VERSELY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "scene_ids": ["scn_1", "scn_3", "scn_2"] }'
 ```
 
-**Credit cost:** Sora 2 Pro Storyboard costs ~$0.30/second → ~3 credits/second via API. A 10-second storyboard ≈ 30 credits.
-
-## Step 4: Poll for Completion
-
-Use the status endpoint to check when the video is ready:
+## Movie CRUD
 
 ```bash
-for i in $(seq 1 60); do
-  STATUS=$(curl -s "$VERSELY_API_URL/api/v1/status/$REQUEST_ID" \
-    -H "Authorization: Bearer $VERSELY_API_KEY")
-  STATE=$(echo $STATUS | jq -r '.status')
-  if [ "$STATE" = "completed" ]; then
-    VIDEO_URL=$(echo $STATUS | jq -r '.result_url')
-    echo "Video ready: $VIDEO_URL"
-    break
-  elif [ "$STATE" = "failed" ]; then
-    echo "Generation failed"
-    break
-  fi
-  echo "Generating... ($i/60)"
-  sleep 10
-done
+# List your movies
+curl "$VERSELY_API_URL/api/v1/movie/list?page=1&limit=20" \
+  -H "Authorization: Bearer $VERSELY_API_KEY"
+
+# Get a movie with all scenes
+curl "$VERSELY_API_URL/api/v1/movie/$MOVIE_ID" \
+  -H "Authorization: Bearer $VERSELY_API_KEY"
+
+# Update metadata
+curl -X PUT "$VERSELY_API_URL/api/v1/movie/$MOVIE_ID" \
+  -H "Authorization: Bearer $VERSELY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "title": "Renamed", "transition_type": "dissolve" }'
+
+# Delete movie + all scenes
+curl -X DELETE "$VERSELY_API_URL/api/v1/movie/$MOVIE_ID" \
+  -H "Authorization: Bearer $VERSELY_API_KEY"
 ```
-
-**Typical generation time:** 2-5 minutes for storyboard videos.
-
-## Step 5: Merge Multiple Scenes (Optional)
-
-If you generated scenes separately (e.g., different models per scene), merge them into one video.
-
-This is available through the agentic chat system's `merge_movie_scenes` tool, which uses the Segmind Multi Video Merge API.
-
-**Merge parameters:**
-- `video_urls` (required): Array of video URLs in order
-- `transition_type` (optional): `"concat"` | `"fade"` (default) | `"dissolve"` | `"wipe"`
-- `transition_duration` (optional): Seconds between scenes (default: 0.5)
-- `audio_handling` (optional): `"merge"` (default) | `"first"` | `"none"`
 
 ## Full Pipeline Example
 
 ```bash
-# 1. Check credits (storyboard is expensive)
+# 1. Check budget — chained 3-scene at 5s each ≈ 15s of video
 CREDITS=$(curl -s "$VERSELY_API_URL/api/v1/user/me" \
-  -H "Authorization: Bearer $VERSELY_API_KEY" | jq -r '.credits')
-echo "Credits: $CREDITS (need ~30 for 10s storyboard via API)"
+  -H "Authorization: Bearer $VERSELY_API_KEY" | jq -r '.user.credits')
+echo "Have $CREDITS credits"
 
-# 2. Expand scenes
-SCENE1=$(curl -s -X POST "$VERSELY_API_URL/api/v1/generate/expand-scene" \
+# 2. Create the movie project
+MOVIE_ID=$(curl -s -X POST "$VERSELY_API_URL/api/v1/movie/create" \
   -H "Authorization: Bearer $VERSELY_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"description": "Person enters a dark room", "style": "cinematic", "camera": "dolly_in"}')
-EXPANDED1=$(echo $SCENE1 | jq -r '.expanded')
+  -d '{
+    "title": "Quick Demo",
+    "scenes": [
+      { "generation_type": "text_to_video", "model": "VEO 3.1",
+        "prompt": "Sunrise over mountains", "duration": 5 },
+      { "generation_type": "previous_scene_image_to_video", "model": "Kling 2.5 Turbo I2V",
+        "prompt": "Camera pans down to a river", "duration": 5 }
+    ]
+  }' | jq -r '.data.movie.id')
 
-SCENE2=$(curl -s -X POST "$VERSELY_API_URL/api/v1/generate/expand-scene" \
-  -H "Authorization: Bearer $VERSELY_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"description": "They find a glowing artifact on a table", "style": "cinematic", "camera": "zoom_in"}')
-EXPANDED2=$(echo $SCENE2 | jq -r '.expanded')
+# 3. Kick off generation
+curl -s -X POST "$VERSELY_API_URL/api/v1/movie/$MOVIE_ID/generate" \
+  -H "Authorization: Bearer $VERSELY_API_KEY"
 
-# 3. Generate storyboard
-RESPONSE=$(curl -s -X POST "$VERSELY_API_URL/api/v1/generate/story" \
-  -H "Authorization: Bearer $VERSELY_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"model\": \"Sora 2 Pro Storyboard\",
-    \"scenes\": [
-      {\"description\": \"$EXPANDED1\", \"duration\": \"5\"},
-      {\"description\": \"$EXPANDED2\", \"duration\": \"5\"}
-    ],
-    \"aspect_ratio\": \"16:9\"
-  }")
-REQUEST_ID=$(echo $RESPONSE | jq -r '.data.successful[0].data.requestId')
-
-# 4. Poll for completion
-for i in $(seq 1 60); do
-  STATUS=$(curl -s "$VERSELY_API_URL/api/v1/status/$REQUEST_ID" \
+# 4. Poll movie status (auto-combines when done)
+for i in $(seq 1 90); do
+  RESP=$(curl -s "$VERSELY_API_URL/api/v1/movie/$MOVIE_ID/status" \
     -H "Authorization: Bearer $VERSELY_API_KEY")
-  STATE=$(echo $STATUS | jq -r '.status')
+  STATE=$(echo "$RESP" | jq -r '.data.status')
   if [ "$STATE" = "completed" ]; then
-    VIDEO_URL=$(echo $STATUS | jq -r '.result_url')
-    echo "Movie ready: $VIDEO_URL"
-    break
+    URL=$(echo "$RESP" | jq -r '.data.final_video_url')
+    echo "Final: $URL"; break
   elif [ "$STATE" = "failed" ]; then
-    echo "Failed"; break
+    echo "Failed"; echo "$RESP" | jq '.data.scenes' ; break
   fi
   sleep 10
 done
 ```
 
-## Available Story Models
+## Common Gotchas
 
-| Model | Best For | ~Credits (10s, API) |
-|-------|----------|---------------------|
-| Sora 2 Pro Storyboard | Best quality, multi-scene | ~30 |
-| Kling 2.5 Turbo | Good quality, faster | ~5 |
-| VEO 3.1 First Last Frame | Transition between 2 frames | ~2-4 |
+- **Don't poll `/status/:requestId` per scene.** Use `/movie/:id/status` — it aggregates per-scene state into one response.
+- **Dependent scenes can't be the first scene.** If you put `previous_scene_*` at order 1 you'll get a 400 at create time.
+- **Scene 1 in chained movies needs an explicit input.** Use `text_to_video` (with `prompt`), `image_to_video` (with `image_url`), or `first_last_frame` — Scene 2+ then chain with `previous_scene_*`.
+- **`previous_scene_image_to_video` retries require the previous scene to be `completed`.** The backend extracts the parent's last frame on retry; if the parent is `failed`, retry it first.
+- **Auto-combine** runs when the final scene's webhook arrives; you usually don't need to call `/combine` explicitly.
+- **Credits are refunded** for dispatch failures (independent scenes that failed to start) and cascade failures (dependents whose parent failed). Successful dispatches that later fail provider-side are NOT refunded automatically.
 
 ## Error Handling
 
-- **401 Unauthorized** — API key invalid or expired.
-- **402 Payment Required** — Insufficient credits. Storyboards are expensive — check first.
-- **403 Forbidden** — API key lacks `generate` scope.
-- **429 Too Many Requests** — Rate limited. Video generation: max 2 concurrent per key.
-- **Generation timeout** (5+ min) — Report as failed, suggest retrying with a different model.
-- **500 Internal Server Error** — Retry once after 10 seconds.
+- `401` — invalid / expired API key.
+- `403` — wrong scope, OR balance ≤ 0 at request entry, OR movie owned by another user.
+- `402` — credit deduction failed mid-flight.
+- `404` — movie or scene not found.
+- `409` — movie already `generating` or `combining`. Poll instead.
+- `429` — rate limited. Default 60 req/min per key; cost-sensitive endpoints (story, expand-scene) are 30 req/min.
+- `500` — provider failure. Read `details` array; specific scenes' errors are in `scenes[].error`.
 
 ## Rate Limits
 
-- Default: 60 requests/minute per API key
-- Generation: 20 requests/minute
-- Video generation: recommended max 2 concurrent requests
-- Response headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
+- Default: 60 requests/minute per API key.
+- `/movie/*` shares the default bucket; per-scene generation goes through provider-specific concurrency caps (≈ 2 concurrent video jobs per key recommended).
+- Headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
 
-For complete API schemas, see [api-reference.md](api-reference.md).
+## Lower-Level Alternative — `/generate/story`
+
+If you don't need project state, scene retries, or chained frames, use the one-shot `/generate/story` endpoint with Sora 2 Pro Storyboard. See [api-reference.md](api-reference.md) for details.
+
+For complete API schemas (movie + story), see [api-reference.md](api-reference.md).

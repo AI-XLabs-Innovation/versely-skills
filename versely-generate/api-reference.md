@@ -249,7 +249,9 @@ Generate sound effects.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `prompt` | string | Yes | Sound effect description |
-| `duration` | number | No | Duration in seconds |
+| `duration_seconds` | number | No | Duration in seconds (default: 10) |
+| `loop` | boolean | No | Whether the effect should loop (default: false) |
+| `prompt_influence` | number | No | 0-1, how strictly to follow prompt (default: 0.3) |
 
 ### curl Example
 
@@ -257,7 +259,7 @@ Generate sound effects.
 curl -X POST "$VERSELY_API_URL/api/v1/audio/sound-effect" \
   -H "Authorization: Bearer $VERSELY_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"prompt": "Thunder rolling across mountains", "duration": 5}'
+  -d '{"prompt": "Thunder rolling across mountains", "duration_seconds": 5}'
 ```
 
 ---
@@ -355,7 +357,7 @@ Get current user info and credit balance.
 | Scope | Limit |
 |-------|-------|
 | Default (per API key) | 60 req/min |
-| Generation endpoints | 20 req/min |
+| Generation endpoints (`/generate`, `/suno`, `/audio`) | 30 req/min, IP-based |
 | Status polling | Recommended: 1 req/5s per request_id |
 
 Response headers on every request:
@@ -380,7 +382,7 @@ All errors follow this format:
 |--------|---------|
 | 400 | Bad request — missing required fields |
 | 401 | Unauthorized — invalid/expired/revoked API key |
-| 402 | Payment required — insufficient credits |
-| 403 | Forbidden — API key lacks required scope |
+| 402 | Per-call credit deduction failed (balance dropped between entry and deduction) |
+| 403 | API key lacks required scope, OR account balance ≤ 0 at request entry, OR `user_id` mismatch |
 | 429 | Rate limited — check `X-RateLimit-Reset` header |
 | 500 | Server error — retry once after 10s |

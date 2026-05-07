@@ -4,6 +4,10 @@ Base URL: `$VERSELY_API_URL` (default: `https://api.versely.studio`)
 
 All endpoints require `Authorization: Bearer $VERSELY_API_KEY`.
 
+For `/api/v1/ugc/*`: do NOT send `user_id` in the body — the API key resolves the user server-side.
+
+For `/api/v1/captions/*`: `user_id` IS REQUIRED in the body for `/captions/auto` and `/captions/tts-voiceover` (these routes don't apply the `enforceUserId` middleware). `/captions/preview` and `/captions/edit` accept `user_id` but don't enforce it. Pass `user_id` everywhere under `/captions/*` to be safe.
+
 ---
 
 ## POST /api/v1/ugc/add-video-overlay
@@ -17,9 +21,14 @@ Overlay one video on top of another.
 | `slideshow_video_url` | string | Yes | Base/background video URL |
 | `overlay_video_url` | string | Yes | Video to overlay on top |
 | `position` | string | Yes | `"top-left"` \| `"top-right"` \| `"bottom-left"` \| `"bottom-right"` \| `"center"` |
-| `overlay_size` | string | No | `"small"` (70%) \| `"medium"` (90%, default) \| `"large"` (110%) |
+| `overlay_size` | string | No | `"small"` (25%) \| `"medium"` (30%, default) \| `"large"` (45%) — % of base video |
+| `overlay_scale` | number | No | 20-200 — numeric scale percentage; takes priority over `overlay_size` |
+| `overlay_x` | number | No | Custom x pixel position; overrides `position` when both `overlay_x` and `overlay_y` are set |
+| `overlay_y` | number | No | Custom y pixel position; overrides `position` when both `overlay_x` and `overlay_y` are set |
 | `remove_black_background` | boolean | No | Remove black pixels from overlay |
 | `background_image_url` | string | No | Custom background when removing black |
+| `key_similarity` | number | No | 0.01-0.40, default 0.15 — black-key tightness (only with `remove_black_background`) |
+| `key_blend` | number | No | 0.0-0.5, default 0.10 — alpha-edge softness (only with `remove_black_background`) |
 
 ### Response
 
@@ -51,7 +60,9 @@ Burn static text captions onto a video.
 | `font_size` | number | No | 8-200 pixels, default 48 |
 | `font_family` | string | No | Font name, default `"Arial"` |
 | `font_color` | string | No | Color name or hex `#RRGGBB`, default `"white"` |
-| `background` | string | No | `"solid"` (default) \| `"gradient"` \| `"none"` |
+| `background` | string | No | `"solid"` (~50% opaque, default) \| `"gradient"` (~75% opaque) \| `"none"` |
+| `outline_width` | number | No | Pixels — text outline/stroke width |
+| `outline_color` | string | No | Color name or hex for the outline |
 
 ### Response
 
@@ -156,6 +167,7 @@ Auto-detect speech and burn timed captions.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `user_id` | string | Yes | User UUID — REQUIRED here (the captions routes don't apply `enforceUserId`) |
 | `video_url` | string | Yes | Video with speech |
 | `words_per_segment` | number | No | Words per caption group (default: 3) |
 | `return_srt` | boolean | No | Return SRT file URL |
@@ -239,6 +251,7 @@ Generate TTS voiceover, overlay on video, and auto-sync captions.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `user_id` | string | Yes | User UUID — REQUIRED here (the captions routes don't apply `enforceUserId`) |
 | `video_url` | string | Yes | Background video |
 | `text` | string | Yes | Voiceover script |
 | `voice_id` | string | Yes | TTS voice ID (e.g., `"Wise_Woman"`) |
@@ -290,9 +303,10 @@ Hex colors: Any `#RRGGBB` format (e.g., `#FF6B35`)
 
 | Status | Meaning |
 |--------|---------|
-| 400 | Missing required fields |
+| 400 | Missing required fields (incl. `user_id` for `/captions/auto` and `/captions/tts-voiceover`) |
 | 401 | Invalid API key |
-| 403 | Access denied / wrong scope |
+| 402 | Per-call flat-cost deduction failed: `/ugc/add-video-overlay` (10 credits), `/ugc/add-captions` (5), `/ugc/remove-black-background` (10) |
+| 403 | API key lacks the `ugc` scope, OR account balance ≤ 0 at request entry, OR `user_id` mismatch on `/ugc/*` |
 | 404 | UGC video not found |
 | 429 | Rate limited |
 | 500 | FFmpeg processing error |
