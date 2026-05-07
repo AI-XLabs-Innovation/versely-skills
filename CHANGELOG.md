@@ -4,6 +4,48 @@ All notable changes to the Versely Agent Skills will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.1.0] - 2026-05-08
+
+### Added
+
+#### versely-analytics (new)
+
+- Read-only analytics for posts published via Versely: per-post engagement metrics with history, account-level overview, and AI trend analysis.
+- Public trending feed across TikTok, Instagram, YouTube, and Twitter for external trend research.
+
+#### versely-music (new)
+
+- Full Suno music API surface — covers all ~24 Suno endpoints.
+- Generate, extend, mashup, replace sections, and boost style on existing tracks.
+- Vocal separation, cover / persona / MIDI generation, and sound-effect creation.
+- Music-video creation from a track plus image set.
+
+#### versely-content-pipeline
+
+- Significantly expanded workflow library and pipeline templates (covering analytics + music on top of existing image / video / slideshow / UGC / social pipelines).
+
+### Changed
+
+#### versely-movie
+
+- Reworked around the dedicated `/api/v1/movie/*` project API: explicit movie + scene records, per-scene non-blind polling, and a unified `/:movieId/status` endpoint replacing per-request-id polling.
+- Scene chaining via previous-frame I2V is first-class (cleaner than the prior storyboard-only flow).
+
+#### versely-generate
+
+- Substantially expanded SKILL.md with deeper model coverage and workflow guidance.
+
+### Tooling
+
+- Added `sync-skills.ps1` — PowerShell helper that wipes and re-copies every skill folder into `~/.claude/skills/` so deleted / renamed source files don't linger after an update.
+- Updated the `sync-models.yml` GitHub Actions workflow.
+
+## [1.0.1] - 2026-02-16
+
+### Changed
+
+- All skill docs updated to reflect the new API-key pricing model: API requests cost **half** the credits of in-app usage (formula changed from `ceil(USD × 20)` to `ceil(USD × 10)`). Affects credit estimates throughout `versely-generate`, `versely-movie`, `versely-slideshow`, `versely-social`, `versely-ugc`, and `versely-content-pipeline`.
+
 ## [1.0.0] - 2026-02-15
 
 ### Added
